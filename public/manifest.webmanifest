@@ -1,0 +1,19 @@
+{
+  "name": "Gruszka Katapulta",
+  "short_name": "Gruszka",
+  "description": "Soczysta gra arcade z gruszką, katapultami i warzywnym chaosem.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#25341f",
+  "background_color": "#91d7ff",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

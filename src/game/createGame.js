@@ -241,6 +241,21 @@ class PearScene extends Phaser.Scene {
     this.setupInput();
     this.setupCollisions();
     this.emitHud();
+    // Pre-start countdown before gameplay begins
+    this.isPreStartCountdown = true;
+    this.countdownRemainingMs = PRE_START_COUNTDOWN_MS;
+    this.countdownOverlay = this.add.container(0, 0).setDepth(200).setScrollFactor(0);
+    this.countdownBg = this.add.rectangle(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 0x000000, 0.28).setScrollFactor(0).setDepth(201);
+    this.countdownTitle = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - 80, 'PRZYGOTUJ SIĘ!', {
+      fontFamily: 'Arial, sans-serif', fontSize: '28px', fontStyle: '900', color: '#fff9d8', stroke: '#2b2b1d', strokeThickness: 6,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+    this.countdownNumber = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 6, '5', {
+      fontFamily: 'Arial, sans-serif', fontSize: '86px', fontStyle: '900', color: '#ffd34a', stroke: '#582e05', strokeThickness: 10,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+    this.countdownLevelInfo = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 86, `Level ${this.level.id} — ${this.level.name}` , {
+      fontFamily: 'Arial, sans-serif', fontSize: '18px', fontStyle: '900', color: '#ffffff', stroke: '#2b2b1d', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+    this.countdownOverlay.add([this.countdownBg, this.countdownTitle, this.countdownNumber, this.countdownLevelInfo]);
     if (!this.performanceMode) {
       floatingText(this, 310, 320, this.level.pearTheme?.abilityFlavorText || 'NIE HAMUJ!', '#ffffff', 30);
     }
@@ -1039,7 +1054,44 @@ class PearScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    if (this.gameDone || this.isPausedByUi || !this.vehicle?.active) {
+    if (this.gameDone || !this.vehicle?.active) {
+      return;
+    }
+    if (this.isPausedByUi) {
+      // paused by UI should freeze countdown as well
+      return;
+    }
+
+    if (this.isPreStartCountdown) {
+      // update countdown
+      this.countdownRemainingMs -= delta;
+      const seconds = Math.max(0, Math.ceil(this.countdownRemainingMs / 1000));
+      this.countdownNumber.setText(seconds > 0 ? String(seconds) : 'START!');
+      // scale animation
+      this.countdownNumber.setScale(1 + Math.sin(this.time.now * 0.02) * 0.03);
+      if (this.countdownRemainingMs <= 0) {
+        // start gameplay
+        this.isPreStartCountdown = false;
+        // remove overlay
+        try {
+          this.countdownOverlay.destroy();
+          this.countdownBg.destroy();
+          this.countdownTitle.destroy();
+          this.countdownNumber.destroy();
+          this.countdownLevelInfo.destroy();
+        } catch (e) {}
+        playSound('ui');
+        // reset gameplay timers so timeMs doesn't include countdown
+        this.startTime = this.time.now;
+      }
+      // while countdown, show idle vehicle and do not progress gameplay
+      setPearMood(this, this.pear, this.pearDamage > 40 ? 'damaged' : 'driving');
+      this.pear.setPosition(this.vehicle.x, this.vehicle.y - 58);
+      this.pear.setRotation(Math.sin(this.time.now * 0.014) * 0.05);
+      this.pear.setScale(1 + Math.sin(this.time.now * 0.012) * 0.025, 1 - Math.sin(this.time.now * 0.012) * 0.018);
+      this.animateVehicleJuice(this.getSteer());
+      this.updateCamera();
+      this.emitHud();
       return;
     }
     const dt = delta / 16.666;

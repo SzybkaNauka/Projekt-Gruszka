@@ -93,3 +93,34 @@ Gra nadal działa bez konta i bez internetu. Wyniki offline trafiają do kolejki
 - Podczas rejestracji prosimy podać `email`, `hasło` i `username` — `username` będzie widoczny publicznie.
 
 Upewnij się, że tabela `profiles` w Supabase posiada kolumnę `username text unique not null` (to jest już zawarte w `supabase/schema.sql`).
+
+## Deploy na Vercel
+
+1. Wejdź na https://vercel.com i zaloguj się na konto GitHub.
+2. Kliknij New Project → Import Git Repository → Wybierz `https://github.com/SzybkaNauka/Projekt-Gruszka`.
+3. Framework Preset: `Vite`.
+4. Install Command: `npm install`.
+5. Build Command: `npm run build`.
+6. Output Directory: `dist`.
+7. Branch: `main`.
+8. Dodaj Environment Variables (w ustawieniach projektu):
+
+   Supabase:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+
+   Firebase (jeśli używasz chatu):
+   - `VITE_FIREBASE_API_KEY`
+   - `VITE_FIREBASE_AUTH_DOMAIN`
+   - `VITE_FIREBASE_DATABASE_URL`
+   - `VITE_FIREBASE_PROJECT_ID`
+   - `VITE_FIREBASE_STORAGE_BUCKET`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+   - `VITE_FIREBASE_APP_ID`
+   - `VITE_FIREBASE_MEASUREMENT_ID`
+
+9. Kliknij Deploy.
+
+Po deployu, w Supabase -> Authentication -> URL Configuration ustaw `Site URL` i `Redirect URLs` dla domeny Vercel (np. `https://twoj-projekt.vercel.app`) oraz `http://localhost:5173` do testów lokalnych.
+
+Jeśli używasz Firebase Realtime Database dla chatu: dodaj domenę `twoj-projekt.vercel.app` do Authorized domains w Firebase Auth i wgraj `firebase.database.rules.json` do konsoli.

@@ -109,3 +109,5 @@ export const LEVEL_TIER_CONFIG = {
     scoreMultiplier: 3,
   },
 };
+
+export const PRE_START_COUNTDOWN_MS = 5000;

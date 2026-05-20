@@ -5,6 +5,7 @@ import { runCampaignSanityCheck } from './game/campaignSanity.js';
 import { getSave, resetProgress, saveLevelResult, setSoundEnabled, setUnlockedLevel } from './game/storage.js';
 import { playSound, setAudioEnabled } from './game/audio.js';
 import InstallPrompt from './components/InstallPrompt.jsx';
+import * as inputSettingsService from './services/inputSettingsService.js';
 import LoginPanel from './components/LoginPanel.jsx';
 import ProfilePanel from './components/ProfilePanel.jsx';
 import LeaderboardPanel from './components/LeaderboardPanel.jsx';
@@ -78,6 +79,13 @@ export default function App() {
       return false;
     }
   });
+  const [touchControlsEnabled, setTouchControlsEnabled] = useState(() => {
+    try {
+      return inputSettingsService.getTouchControlsEnabled();
+    } catch (e) {
+      return false;
+    }
+  });
   const [hud, setHud] = useState({
     level: selectedLevel,
     score: 0,
@@ -146,6 +154,12 @@ export default function App() {
   React.useEffect(() => {
     localStorage.setItem(PERFORMANCE_STORAGE_KEY, JSON.stringify(performanceMode));
   }, [performanceMode]);
+
+  React.useEffect(() => {
+    try {
+      inputSettingsService.setTouchControlsEnabled(!!touchControlsEnabled);
+    } catch (e) {}
+  }, [touchControlsEnabled]);
 
   React.useEffect(() => {
     if (!showSplash) return undefined;
@@ -400,6 +414,9 @@ export default function App() {
             <button className="secondary-button" onClick={toggleSound}>
               Dźwięk: {save.soundEnabled ? 'włączony' : 'wyciszony'}
             </button>
+            <button className="secondary-button" onClick={() => setTouchControlsEnabled((v) => !v)}>
+              Przyciski ekranowe: {touchControlsEnabled ? 'ON' : 'OFF'}
+            </button>
             <button className="secondary-button" onClick={() => setPerformanceMode((value) => !value)}>
               Tryb wydajności: {performanceMode ? 'ON' : 'OFF'}
             </button>
@@ -564,7 +581,29 @@ export default function App() {
           </Suspense>
 
           <div className="rotate-notice">Obróć telefon, żeby grać wygodniej.</div>
-
+          {/* decide whether mobile controls should be visible/disabled */}
+          {(() => {
+            const hasOpenOverlay = screen !== 'game' || showSplash || Boolean(result) || paused;
+            const gameActive = screen === 'game' && !showSplash;
+            const mobileControlsVisible = Boolean(touchControlsEnabled) && gameActive;
+            const mobileControlsDisabled = !gameActive || hasOpenOverlay || Boolean(result) || paused;
+            return (
+              <Suspense fallback={<div className="game-loading"><span>White Raven Studio</span><strong>Ładowanie trasy...</strong></div>}>
+                <GameShell
+                  key={runId}
+                  initialLevel={selectedLevel - 1}
+                  paused={paused || Boolean(result)}
+                  soundEnabled={save.soundEnabled}
+                  skipToken={skipToken}
+                  performanceMode={performanceMode}
+                  onGameEvent={handleGameEvent}
+                  touchControlsEnabled={touchControlsEnabled}
+                  mobileControlsVisible={mobileControlsVisible}
+                  mobileControlsDisabled={mobileControlsDisabled}
+                />
+              </Suspense>
+            );
+          })()}
           {skipAvailable && !paused && !result && (
             <button className="skip-button" onClick={launchPear}>Wystrzał</button>
           )}

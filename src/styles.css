@@ -802,6 +802,62 @@ button:disabled {
   box-shadow: inset 0 16px 12px rgba(255, 255, 255, 0.32);
 }
 
+/* Mobile controls overlay */
+.mobile-controls {
+  position: absolute;
+  inset: auto 0 12px 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.mobile-controls .mobile-dpad {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  width: 140px;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 8px;
+  pointer-events: auto;
+}
+.mobile-controls .mobile-dpad-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.mobile-control-button {
+  min-width: 64px;
+  min-height: 64px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 6px 0 rgba(0,0,0,0.18);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-jump-button {
+  min-width: 88px;
+  min-height: 88px;
+  border-radius: 999px;
+  background: linear-gradient(180deg,#ffd34a,#ffb94a);
+  box-shadow: 0 10px 0 rgba(125,74,42,0.6);
+  pointer-events: auto;
+}
+.mobile-controls.disabled { opacity: 0.48; pointer-events: none; }
+.mobile-control-button.active { transform: scale(0.92); box-shadow: 0 4px 0 rgba(0,0,0,0.16); }
+.mobile-jump-button.active { transform: scale(0.96); box-shadow: 0 6px 0 rgba(0,0,0,0.18); }
+.mobile-controls { transition: opacity 160ms ease; }
+.mobile-controls .mobile-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 18px;
+  pointer-events: auto;
+}
+
+@media (min-width: 900px) {
+  .mobile-controls { display: none; }
+}
+
 .pear-leaf {
   top: 4px;
   left: 68px;

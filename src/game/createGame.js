@@ -184,12 +184,15 @@ function floatingText(scene, x, y, text, color = '#fff3a3', size = 24) {
 }
 
 class PearScene extends Phaser.Scene {
-  constructor(onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false) {
+  constructor(onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false, mobileInputRef = null, showTouchHints = false) {
     super('PearScene');
     this.onGameEvent = onGameEvent;
     this.levelIndex = Phaser.Math.Clamp(initialLevel, 0, levels.length - 1);
     this.soundEnabled = soundEnabled;
     this.performanceMode = performanceMode;
+    this.mobileInputRef = mobileInputRef;
+    this.showTouchHints = showTouchHints;
+    this.prevMobileJump = false;
   }
 
   create() {
@@ -255,6 +258,15 @@ class PearScene extends Phaser.Scene {
     this.countdownLevelInfo = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 86, `Level ${this.level.id} — ${this.level.name}` , {
       fontFamily: 'Arial, sans-serif', fontSize: '18px', fontStyle: '900', color: '#ffffff', stroke: '#2b2b1d', strokeThickness: 4,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+    // optional touch/keyboard hint during countdown
+    if (this.showTouchHints) {
+      const isTouch = !!this.mobileInputRef;
+      const hintText = isTouch ? 'Lewa ręka: sterowanie\nPrawa ręka: SKOK' : 'A/D lub ←→: sterowanie\nSpacja: SKOK';
+      this.countdownHint = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 138, hintText, {
+        fontFamily: 'Arial, sans-serif', fontSize: '14px', fontStyle: '900', color: '#ffffff', stroke: '#2b2b1d', strokeThickness: 3, align: 'center',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+      this.countdownOverlay.add(this.countdownHint);
+    }
     this.countdownOverlay.add([this.countdownBg, this.countdownTitle, this.countdownNumber, this.countdownLevelInfo]);
     if (!this.performanceMode) {
       floatingText(this, 310, 320, this.level.pearTheme?.abilityFlavorText || 'NIE HAMUJ!', '#ffffff', 30);
@@ -582,10 +594,7 @@ class PearScene extends Phaser.Scene {
       if (this.gameDone || this.isPausedByUi) {
         return;
       }
-      if (this.input.manager.pointersTotal >= 2 || pointer.event?.touches?.length >= 2) {
-        this.launchPear();
-        return;
-      }
+      // Pointer steer for mouse/touch dragging on left/right half remains.
       this.pointerSteer = pointer.x < this.scale.width / 2 ? -1 : 1;
     });
     this.input.on('pointerup', () => {
@@ -1079,6 +1088,7 @@ class PearScene extends Phaser.Scene {
           this.countdownTitle.destroy();
           this.countdownNumber.destroy();
           this.countdownLevelInfo.destroy();
+          if (this.countdownHint) this.countdownHint.destroy();
         } catch (e) {}
         playSound('ui');
         // reset gameplay timers so timeMs doesn't include countdown
@@ -1097,7 +1107,17 @@ class PearScene extends Phaser.Scene {
     const dt = delta / 16.666;
     const slickFactor = this.time.now < this.slickUntil ? (this.levelIndex <= 2 ? 0.72 : -0.72) : 1;
     const steer = this.getSteer() * slickFactor;
-    this.updateVehicleMovement(this.vehicle, steer, delta);
+    const verticalBias = (this.mobileInputRef?.current?.up ? -0.28 : 0) + (this.mobileInputRef?.current?.down ? 0.28 : 0);
+    const combinedInput = steer + verticalBias;
+    this.updateVehicleMovement(this.vehicle, combinedInput, delta);
+    // consume mobile one-shot jumpPressed
+    if (this.mobileInputRef?.current?.jumpPressed) {
+      const jp = this.mobileInputRef.current.jumpPressed;
+      if (jp && !this.launched && !this.gameDone && !this.isPausedByUi && !this.isPreStartCountdown) {
+        this.launchPear();
+      }
+      this.mobileInputRef.current.jumpPressed = false;
+    }
     if (steer && this.time.now - this.lastTurnSoundAt > 180) {
       this.lastTurnSoundAt = this.time.now;
       playSound('turn');
@@ -1135,8 +1155,8 @@ class PearScene extends Phaser.Scene {
   }
 
   getSteer() {
-    const left = this.keys?.left?.isDown || this.keys?.a?.isDown;
-    const right = this.keys?.right?.isDown || this.keys?.d?.isDown;
+    const left = this.keys?.left?.isDown || this.keys?.a?.isDown || !!this.mobileInputRef?.current?.left;
+    const right = this.keys?.right?.isDown || this.keys?.d?.isDown || !!this.mobileInputRef?.current?.right;
     return (right ? 1 : 0) - (left ? 1 : 0) || this.pointerSteer;
   }
 
@@ -1387,7 +1407,7 @@ class PearScene extends Phaser.Scene {
   }
 }
 
-export function createGame(parent, onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false) {
+export function createGame(parent, onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false, mobileInputRef = null, showTouchHints = false) {
   return new Phaser.Game({
     type: Phaser.AUTO,
     parent,
@@ -1408,6 +1428,6 @@ export function createGame(parent, onGameEvent, initialLevel = 0, soundEnabled =
     input: {
       activePointers: performanceMode ? 2 : 3,
     },
-    scene: [new PearScene(onGameEvent, initialLevel, soundEnabled, performanceMode)],
+    scene: [new PearScene(onGameEvent, initialLevel, soundEnabled, performanceMode, mobileInputRef, showTouchHints)],
   });
 }

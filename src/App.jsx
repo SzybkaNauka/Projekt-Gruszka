@@ -221,7 +221,7 @@ export default function App() {
 
   async function toggleGameFullscreen() {
     if (!fullscreenAvailable) {
-      setOnlineStatus('Pełny ekran jest niedostępny w tej przeglądarce');
+      setOnlineStatus('Powiększenie na cały ekran jest niedostępne w tej przeglądarce');
       return;
     }
     playSound('ui');
@@ -233,7 +233,7 @@ export default function App() {
         window.screen.orientation.lock('landscape').catch(() => {});
       }
     } catch (error) {
-      setOnlineStatus('Pełny ekran nie został włączony');
+      setOnlineStatus('Powiększenie na cały ekran nie zostało włączone');
     }
   }
 
@@ -446,7 +446,7 @@ export default function App() {
           <div className="menu-actions menu-primary-actions">
             <button className="primary-button big-play" onClick={playUnlocked}>Graj</button>
             <button className="secondary-button big-play fullscreen-menu-button" onClick={toggleGameFullscreen}>
-              {fullscreenActive ? 'Okno' : 'Pełny ekran'}
+              {fullscreenActive ? 'Wyjdź z pełnego ekranu' : 'Powiększ na cały ekran'}
             </button>
           </div>
 
@@ -613,7 +613,7 @@ export default function App() {
             <button onClick={togglePause}>{paused ? 'Wznów' : 'Pauza'}</button>
             <button onClick={restartLevel}>Restart</button>
             <button onClick={goMenu}>Menu</button>
-            <button onClick={toggleGameFullscreen}>{fullscreenActive ? 'Okno' : 'Pełny'}</button>
+            <button onClick={toggleGameFullscreen}>{fullscreenActive ? 'Okno' : 'Cały ekran'}</button>
             <button onClick={toggleSound}>{save.soundEnabled ? 'Dźwięk' : 'Cisza'}</button>
           </div>
 

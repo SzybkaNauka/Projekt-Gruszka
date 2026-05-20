@@ -10,3 +10,5 @@ dist/
 android/app/build/
 ios/App/Build/
 .env.local
+
+.vercel

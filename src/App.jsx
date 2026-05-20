@@ -568,17 +568,7 @@ export default function App() {
             <button onClick={toggleSound}>{save.soundEnabled ? 'Dźwięk' : 'Cisza'}</button>
           </div>
 
-          <Suspense fallback={<div className="game-loading"><span>White Raven Studio</span><strong>Ładowanie trasy...</strong></div>}>
-            <GameShell
-              key={runId}
-              initialLevel={selectedLevel - 1}
-              paused={paused || Boolean(result)}
-              soundEnabled={save.soundEnabled}
-              skipToken={skipToken}
-              performanceMode={performanceMode}
-              onGameEvent={handleGameEvent}
-            />
-          </Suspense>
+          
 
           <div className="rotate-notice">Obróć telefon, żeby grać wygodniej.</div>
           {/* decide whether mobile controls should be visible/disabled */}

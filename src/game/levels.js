@@ -1,4 +1,4 @@
-import { PREMIUM_STAR_SCORE_BY_TIER } from './constants.js';
+import { DUEL_POWERUPS, PREMIUM_STAR_SCORE_BY_TIER } from './constants.js';
 
 const legacy = {
   pears: ['normal'],
@@ -164,6 +164,86 @@ function coinArc(startX, startY, count, stepX, lift = 92) {
       y: startY - Math.sin(Math.PI * t) * lift,
     };
   });
+}
+
+function buildDuelConfig({ id, theme, tierName, road, length, transitions, finishX }) {
+  const powerupTypes = Object.keys(DUEL_POWERUPS);
+  const world = Math.floor((id - 1) / 10);
+  const spawnCount = PhaserSafeClamp(5 + world + (id % 10 === 0 ? 2 : 0), 5, 10);
+  const spacing = Math.max(320, (finishX - 700) / spawnCount);
+  const powerupSpawns = Array.from({ length: spawnCount }, (_, index) => {
+    const x = 620 + spacing * index + ((id + index) % 3) * 58;
+    const risky = index % 3 === 1;
+    const y = risky
+      ? road.top + 72 + ((id + index) % 2) * 40
+      : road.top + 120 + ((id + index) % 4) * ((road.bottom - road.top - 240) / 3);
+    return {
+      id: `duel_l${id}_p${index + 1}`,
+      x: Math.round(Math.min(finishX - 260, x)),
+      y: Math.round(y),
+      typePool: [
+        powerupTypes[(id + index) % powerupTypes.length],
+        powerupTypes[(id + index + 5) % powerupTypes.length],
+        risky ? 'pumpkin_mine' : 'turbo_juice',
+      ],
+      risky,
+      respawnMs: 8000,
+    };
+  });
+  const trapLanes = transitions.map((transition, index) => ({
+    id: `duel_l${id}_trap_${index + 1}`,
+    start: Math.round(zoneCenter(transition.launchZoneX) + 180),
+    end: Math.round(Math.min(finishX - 220, transition.targetVehicleX + 260)),
+    yMin: road.top + 46,
+    yMax: road.bottom - 46,
+    warningMs: 800,
+  }));
+  const duelSafeZones = [
+    { id: `duel_l${id}_start_safe`, start: 0, end: 520 },
+    ...transitions.map((transition, index) => ({
+      id: `duel_l${id}_landing_safe_${index + 1}`,
+      start: Math.round(transition.targetVehicleX - 130),
+      end: Math.round(transition.targetVehicleX + 170),
+    })),
+  ];
+  const attackDisabledZones = [
+    { id: `duel_l${id}_opening_grace`, start: 0, end: 700 },
+    ...transitions.map((transition, index) => ({
+      id: `duel_l${id}_jump_lock_${index + 1}`,
+      start: Math.round(zoneCenter(transition.launchZoneX) - 120),
+      end: Math.round(transition.targetVehicleX + 90),
+      reason: 'fair_jump_window',
+    })),
+  ];
+  const teamBoostZones = powerupSpawns
+    .filter((_, index) => index % 4 === 2)
+    .map((spawn, index) => ({ id: `duel_l${id}_team_${index + 1}`, x: spawn.x + 120, y: road.bottom - 80, radius: 120 }));
+  const handcrafted = {
+    1: { recommendedModes: ['1v1', '2v2'], note: 'training duel with clear tomato and shield lines' },
+    5: { recommendedModes: ['1v1', '2v2', '3v3'], note: 'pumpkin highway speed lanes favor turbo and mines' },
+    10: { recommendedModes: ['1v1', '2v2'], note: 'boss arena disables attacks during hardest drops' },
+    20: { recommendedModes: ['2v2', '3v3'], note: 'mini boss routes give team boost windows' },
+    30: { recommendedModes: ['2v2', '3v3', '4v4'], note: 'advanced arena with readable trap lanes' },
+    40: { recommendedModes: ['3v3', '4v4'], note: 'very hard team race with fewer global effects' },
+    50: { recommendedModes: ['4v4', '5v5'], note: 'legendary chaos with simplified ghosts' },
+  }[id];
+  return {
+    enabled: true,
+    theme,
+    tier: tierName,
+    powerupSpawns,
+    trapLanes,
+    duelSafeZones,
+    attackDisabledZones,
+    teamBoostZones,
+    recommendedModes: handcrafted?.recommendedModes || (world <= 1 ? ['1v1', '2v2'] : world <= 3 ? ['2v2', '3v3', '4v4'] : ['3v3', '4v4', '5v5']),
+    maxRecommendedPlayers: world <= 1 ? 4 : world <= 3 ? 8 : 10,
+    note: handcrafted?.note || 'generated arcade PvP overlay',
+  };
+}
+
+function PhaserSafeClamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function zoneCenter(zone) {
@@ -539,6 +619,7 @@ function buildLevel(id) {
   const finishX = length - 240;
   const premiumStar = buildPremiumStar({ id, world, tierName, road, transitions, finishX, theme: themeConfig.theme });
   const extraChallenges = buildExtraChallenges({ id, world, tierName, theme: themeConfig.theme, road, transitions, premiumStar, finishX });
+  const duelConfig = buildDuelConfig({ id, theme: themeConfig.theme, tierName, road, length, transitions, finishX });
   const finishBonus = tier.bonus + id * 230;
   const cameraLookahead = tier.camera + (themeCameraBoost[themeConfig.theme] || 0);
   const oneStar = finishBonus;
@@ -588,6 +669,7 @@ function buildLevel(id) {
     },
     premiumStar,
     extraChallenges,
+    duelConfig,
     ...legacy,
   };
 }

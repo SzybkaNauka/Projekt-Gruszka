@@ -20,6 +20,12 @@ import {
   CAMERA_LOOKAHEAD_FAST,
   COMBO_TIMEOUT,
   DEBUG_LEVEL_HELPERS,
+  DUEL_ATTACK_GRACE_MS,
+  DUEL_HIT_INVULNERABILITY_MS,
+  DUEL_POSITION_SEND_INTERVAL_MS,
+  DUEL_POWERUP_RESPAWN_MS,
+  DUEL_POWERUPS,
+  DUEL_TRAP_WARNING_MS,
   EARLY_LEVEL_CATCH_RADIUS_MULTIPLIER,
   EARLY_LEVEL_STABILITY_BONUS,
   FAIL_GRACE_DISTANCE_EASY,
@@ -214,7 +220,7 @@ function floatingText(scene, x, y, text, color = '#fff3a3', size = 24) {
 }
 
 class PearScene extends Phaser.Scene {
-  constructor(onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false, mobileInputRef = null, showTouchHints = false) {
+  constructor(onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false, mobileInputRef = null, showTouchHints = false, duelOptions = null) {
     super('PearScene');
     this.onGameEvent = onGameEvent;
     this.levelIndex = Phaser.Math.Clamp(initialLevel, 0, levels.length - 1);
@@ -222,6 +228,8 @@ class PearScene extends Phaser.Scene {
     this.performanceMode = performanceMode;
     this.mobileInputRef = mobileInputRef;
     this.showTouchHints = showTouchHints;
+    this.duelOptions = duelOptions || {};
+    this.duelMode = Boolean(duelOptions?.duelMode);
     this.prevMobileJump = false;
   }
 
@@ -263,6 +271,18 @@ class PearScene extends Phaser.Scene {
     this.outWarningSince = 0;
     this.lastDustAt = 0;
     this.lastWheelTrackAt = 0;
+    this.duelHeldPowerup = null;
+    this.duelShieldUntil = 0;
+    this.duelReflectUntil = 0;
+    this.duelAntiSlipUntil = 0;
+    this.duelTurboUntil = 0;
+    this.duelMagnetUntil = 0;
+    this.duelJumpSabotageUntil = 0;
+    this.duelLastHitAt = 0;
+    this.duelLastSnapshotAt = 0;
+    this.duelLastHudAt = 0;
+    this.duelStartedAt = 0;
+    this.duelStats = { hitsDealt: 0, hitsReceived: 0, powerupsUsed: 0, trapsPlaced: 0, shieldsUsed: 0 };
 
     this.matter.world.setBounds(0, 0, this.route.length || LEVEL_WORLD_WIDTH, WORLD_HEIGHT, 64, false, false, false, false);
     this.matter.world.setGravity(0, 0);
@@ -271,6 +291,7 @@ class PearScene extends Phaser.Scene {
 
     this.addWorldArt();
     this.createRoute();
+    this.createDuelLayer();
     if (!this.performanceMode) {
       this.addReadabilityMarkers();
     }
@@ -297,7 +318,9 @@ class PearScene extends Phaser.Scene {
     // optional touch/keyboard hint during countdown
     if (this.showTouchHints) {
       const isTouch = !!this.mobileInputRef;
-      const hintText = isTouch ? 'Lewa ręka: sterowanie\nPrawa ręka: SKOK' : 'A/D lub ←→: sterowanie\nSpacja: SKOK';
+      const hintText = this.duelMode
+        ? (isTouch ? 'Lewa reka: sterowanie\nPrawa reka: SKOK + POWER' : 'A/D lub strzalki: sterowanie\nSpacja: SKOK, E/Shift: POWER')
+        : (isTouch ? 'Lewa ręka: sterowanie\nPrawa ręka: SKOK' : 'A/D lub ←→: sterowanie\nSpacja: SKOK');
       this.countdownHint = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 138, hintText, {
         fontFamily: 'Arial, sans-serif', fontSize: '14px', fontStyle: '900', color: '#ffffff', stroke: '#2b2b1d', strokeThickness: 3, align: 'center',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
@@ -474,6 +497,263 @@ class PearScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Linear',
     });
+  }
+
+  createDuelLayer() {
+    if (!this.duelMode) {
+      return;
+    }
+    this.duelPowerups = [];
+    this.duelRemoteSprites = new Map();
+    this.duelProcessedEvents = new Set();
+    this.duelGhostLayer = this.add.container(0, 0).setDepth(16);
+    this.duelTrapLayer = this.add.container(0, 0).setDepth(15);
+    const config = this.level.duelConfig || {};
+    (config.powerupSpawns || []).forEach((spawn, index) => {
+      const typePool = spawn.typePool?.length ? spawn.typePool : Object.keys(DUEL_POWERUPS);
+      const type = typePool[(this.level.id + index) % typePool.length];
+      const powerup = DUEL_POWERUPS[type] || DUEL_POWERUPS.turbo_juice;
+      const ring = this.add.circle(spawn.x, spawn.y, 28, powerup.color, 0.24).setDepth(16);
+      ring.setStrokeStyle(3, powerup.color, 0.72);
+      const icon = this.add.text(spawn.x, spawn.y, powerup.category === 'defense' ? 'T' : powerup.category === 'boost' ? 'B' : 'P', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '22px',
+        fontStyle: '900',
+        color: '#fff9d8',
+        stroke: '#1d2d1c',
+        strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(17);
+      const item = this.add.container(0, 0, [ring, icon]).setDepth(16);
+      item.setData('id', spawn.id);
+      item.setData('type', type);
+      item.setData('x', spawn.x);
+      item.setData('y', spawn.y);
+      item.setData('collectedUntil', 0);
+      this.tweens.add({ targets: item.list, scale: 1.12, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.duelPowerups.push(item);
+    });
+    this.onGameEvent({ type: 'duel_hud', heldPowerup: null, stats: this.duelStats, status: 'READY' });
+  }
+
+  collectDuelPowerups() {
+    if (!this.duelMode || this.duelHeldPowerup) {
+      return;
+    }
+    const target = this.launched ? this.pear : this.vehicle;
+    this.duelPowerups?.forEach((item) => {
+      const collectedUntil = item.getData('collectedUntil') || 0;
+      const active = this.time.now >= collectedUntil;
+      item.setAlpha(active ? 1 : 0.25);
+      if (!active || Phaser.Math.Distance.Between(target.x, target.y, item.getData('x'), item.getData('y')) > 58) {
+        return;
+      }
+      const powerup = DUEL_POWERUPS[item.getData('type')] || DUEL_POWERUPS.turbo_juice;
+      this.duelHeldPowerup = powerup;
+      item.setData('collectedUntil', this.time.now + DUEL_POWERUP_RESPAWN_MS);
+      this.duelStats.powerupsUsed = this.duelStats.powerupsUsed;
+      floatingText(this, target.x, target.y - 82, powerup.name.toUpperCase(), '#fff3a3', 21);
+      playSound('coin');
+      this.onGameEvent({ type: 'duel_powerup_collected', powerup, powerupId: item.getData('id') });
+      this.emitDuelHud('POWER GOTOWY');
+    });
+  }
+
+  tryUseDuelPowerup() {
+    if (!this.duelMode || !this.duelHeldPowerup || this.gameDone || this.isPausedByUi || this.isPreStartCountdown) {
+      return;
+    }
+    if (this.time.now - this.startTime < DUEL_ATTACK_GRACE_MS && !['pear_shield', 'anti_slip', 'turbo_juice', 'magnet_seed'].includes(this.duelHeldPowerup.type)) {
+      floatingText(this, this.vehicle.x + 70, this.vehicle.y - 90, 'GRACE!', '#ffffff', 22);
+      return;
+    }
+    const powerup = this.duelHeldPowerup;
+    this.duelHeldPowerup = null;
+    this.duelStats.powerupsUsed += 1;
+    if (['carrot_spike', 'broccoli_wall', 'pumpkin_mine', 'onion_tear'].includes(powerup.type)) {
+      this.duelStats.trapsPlaced += 1;
+    }
+    if (powerup.type === 'pear_shield') this.duelStats.shieldsUsed += 1;
+    const target = this.pickDuelTarget(powerup);
+    this.applyOwnDuelPowerup(powerup);
+    this.onGameEvent({
+      type: 'duel_powerup_used',
+      powerup,
+      targetUserId: target?.user_id || target?.userId || null,
+      targetTeam: powerup.type === 'team_boost' ? this.duelOptions.duelTeam : target?.team,
+      x: this.vehicle?.x || this.pear?.x || 0,
+      y: this.vehicle?.y || this.pear?.y || 0,
+      stats: this.duelStats,
+    });
+    floatingText(this, this.vehicle.x + 60, this.vehicle.y - 96, powerup.name.toUpperCase(), '#ffffff', 22);
+    this.emitDuelHud('UZYTO POWER');
+  }
+
+  pickDuelTarget(powerup) {
+    const players = this.duelOptions.remotePlayersRef?.current || [];
+    const myTeam = this.duelOptions.duelTeam;
+    const enemies = players
+      .filter((player) => player.user_id !== this.duelOptions.duelPlayerId && player.team !== myTeam && !player.finished && !player.failed)
+      .sort((a, b) => Math.abs((a.x || 0) - this.vehicle.x) - Math.abs((b.x || 0) - this.vehicle.x));
+    if (powerup.type === 'team_boost') return null;
+    return enemies.find((player) => (player.x || 0) >= this.vehicle.x - 220) || enemies[0] || null;
+  }
+
+  applyOwnDuelPowerup(powerup) {
+    if (powerup.type === 'pear_shield') this.duelShieldUntil = this.time.now + powerup.durationMs;
+    if (powerup.type === 'reflect_attack') this.duelReflectUntil = this.time.now + powerup.durationMs;
+    if (powerup.type === 'anti_slip') this.duelAntiSlipUntil = this.time.now + powerup.durationMs;
+    if (powerup.type === 'turbo_juice' || powerup.type === 'team_boost') this.duelTurboUntil = this.time.now + powerup.durationMs;
+    if (powerup.type === 'magnet_seed') this.duelMagnetUntil = this.time.now + powerup.durationMs;
+    if (powerup.type === 'combo_steal') this.addScore(650, this.vehicle.x, this.vehicle.y - 86, 'COMBO BONUS!');
+  }
+
+  processDuelEvents() {
+    if (!this.duelMode) return;
+    const events = this.duelOptions.duelEventsRef?.current || [];
+    events.forEach((event) => {
+      if (!event?.id || this.duelProcessedEvents.has(event.id)) return;
+      this.duelProcessedEvents.add(event.id);
+      const payload = event.payload || event;
+      if (payload.senderUserId === this.duelOptions.duelPlayerId || event.sender_user_id === this.duelOptions.duelPlayerId) return;
+      const targetUserId = payload.targetUserId || event.target_user_id;
+      const targetTeam = payload.targetTeam || event.target_team;
+      const affectsMe = !targetUserId && !targetTeam
+        ? ['veggie_fog', 'team_boost'].includes(payload.powerupType)
+        : targetUserId === this.duelOptions.duelPlayerId || targetTeam === this.duelOptions.duelTeam;
+      if (!affectsMe || payload.type !== 'powerup_used') return;
+      this.applyDuelEffect(payload.powerupType, payload);
+    });
+  }
+
+  applyDuelEffect(effectType, payload = {}) {
+    if (!this.duelMode || this.gameDone || this.isPreStartCountdown) return;
+    if (this.time.now - this.duelLastHitAt < DUEL_HIT_INVULNERABILITY_MS) return;
+    const powerup = DUEL_POWERUPS[effectType] || DUEL_POWERUPS.rotten_tomato;
+    if (this.duelShieldUntil > this.time.now || this.duelReflectUntil > this.time.now) {
+      this.duelShieldUntil = 0;
+      this.duelReflectUntil = 0;
+      this.duelStats.shieldsUsed += 1;
+      floatingText(this, this.vehicle.x, this.vehicle.y - 110, 'BLOK!', '#6bd6ff', 28);
+      this.onGameEvent({ type: 'duel_shield_block', powerup, stats: this.duelStats });
+      return;
+    }
+    this.duelLastHitAt = this.time.now;
+    this.duelStats.hitsReceived += 1;
+    if (effectType === 'rotten_tomato' || effectType === 'veggie_fog') {
+      const color = effectType === 'rotten_tomato' ? 0xe64135 : 0xcfd8dc;
+      const alpha = effectType === 'rotten_tomato' ? 0.16 : 0.12;
+      const flash = this.add.rectangle(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, color, alpha).setScrollFactor(0).setDepth(96);
+      this.tweens.add({ targets: flash, alpha: 0, duration: powerup.durationMs, onComplete: () => flash.destroy() });
+      this.slickUntil = Math.max(this.slickUntil || 0, this.time.now + 700);
+    }
+    if (effectType === 'onion_tear') this.spawnDuelTrap('onionSlick', this.vehicle.x + 260, this.vehicle.y, 'SLISKO!');
+    if (effectType === 'carrot_spike') this.spawnDuelTrap('spikes', this.vehicle.x + 230, this.vehicle.y, 'KOLCE!');
+    if (effectType === 'broccoli_wall') this.spawnDuelTrap('broccoliBarricade', this.vehicle.x + 280, this.vehicle.y, 'BARYKADA!');
+    if (effectType === 'pumpkin_mine') this.spawnDuelTrap('veggieMine', this.vehicle.x + 300, this.vehicle.y, 'MINA!');
+    if (effectType === 'lane_swap') this.vehicle?.setVelocity(this.vehicle.body.velocity.x, Phaser.Math.Clamp(this.vehicle.body.velocity.y + Phaser.Math.Between(-4, 4), -5, 5));
+    if (effectType === 'sabotage_jump') this.duelJumpSabotageUntil = this.time.now + powerup.durationMs;
+    floatingText(this, this.vehicle.x + 40, this.vehicle.y - 118, effectType === 'sabotage_jump' ? 'SABOTAZ!' : 'HIT!', '#ffef8a', 24);
+    this.cameras.main.shake(100, 0.004);
+    this.emitDuelHud('HIT');
+  }
+
+  spawnDuelTrap(type, x, y, text) {
+    const warn = this.add.text(x, y - 64, text, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '18px',
+      fontStyle: '900',
+      color: '#ffe1d6',
+      stroke: '#5b1510',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(18);
+    this.time.delayedCall(DUEL_TRAP_WARNING_MS, () => {
+      warn.destroy();
+      const obstacle = this.createObstacle({ type, x, y, hint: 'PvP', deadly: type === 'veggieMine' || type === 'spikes' }, 5000 + this.obstacles.length);
+      if (obstacle) {
+        obstacle.setData('id', `duel-${type}-${this.time.now}`);
+        this.obstacles.push(obstacle);
+        this.time.delayedCall(5200, () => {
+          if (obstacle.active) {
+            obstacle.destroy();
+            this.obstacles = this.obstacles.filter((item) => item !== obstacle);
+          }
+        });
+      }
+    });
+  }
+
+  updateRemoteDuelPlayers() {
+    if (!this.duelMode) return;
+    const players = this.duelOptions.remotePlayersRef?.current || [];
+    const seen = new Set();
+    players.forEach((player) => {
+      const id = player.user_id || player.userId;
+      if (!id || id === this.duelOptions.duelPlayerId) return;
+      seen.add(id);
+      let ghost = this.duelRemoteSprites.get(id);
+      if (!ghost) {
+        const color = player.team === 'A' ? 0x5bd7ff : 0xff6b6b;
+        const body = this.add.rectangle(player.x || 190, player.y || 430, 92, 36, color, 0.42).setStrokeStyle(3, color, 0.8);
+        const label = this.add.text(player.x || 190, (player.y || 430) - 42, player.display_name || player.username || 'DUEL', {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '14px',
+          fontStyle: '900',
+          color: '#ffffff',
+          stroke: '#1d2d1c',
+          strokeThickness: 3,
+        }).setOrigin(0.5);
+        ghost = this.add.container(0, 0, [body, label]).setDepth(17);
+        ghost.bodyRect = body;
+        ghost.nameLabel = label;
+        this.duelGhostLayer.add(ghost);
+        this.duelRemoteSprites.set(id, ghost);
+      }
+      ghost.x = Phaser.Math.Linear(ghost.x || player.x || 0, Number(player.x || 0), 0.22);
+      ghost.y = Phaser.Math.Linear(ghost.y || player.y || 0, Number(player.y || 0), 0.22);
+      ghost.setAlpha(player.team === this.duelOptions.duelTeam ? 0.34 : 0.62);
+      ghost.nameLabel.setText(`${player.team || '?'} ${player.display_name || player.username || 'DUEL'}`);
+    });
+    this.duelRemoteSprites.forEach((ghost, id) => {
+      if (!seen.has(id)) {
+        ghost.destroy();
+        this.duelRemoteSprites.delete(id);
+      }
+    });
+  }
+
+  sendDuelSnapshot(force = false) {
+    if (!this.duelMode || !this.vehicle?.active) return;
+    const now = this.time.now;
+    if (!force && now - this.duelLastSnapshotAt < DUEL_POSITION_SEND_INTERVAL_MS) return;
+    this.duelLastSnapshotAt = now;
+    const target = this.launched ? this.pear : this.vehicle;
+    this.onGameEvent({
+      type: 'duel_snapshot',
+      snapshot: {
+        x: target.x,
+        y: target.y,
+        progressPercent: Phaser.Math.Clamp((target.x / (this.route.finishX || this.route.length || LEVEL_WORLD_WIDTH)) * 100, 0, 100),
+        velocityX: target.body?.velocity?.x || 0,
+        velocityY: target.body?.velocity?.y || 0,
+        currentVehicle: this.currentVehicleType,
+        heldPowerup: this.duelHeldPowerup?.type || null,
+        score: this.score,
+        status: this.gameDone ? 'finished' : 'running',
+        alive: this.pearDamage < PEAR_MAX_DAMAGE,
+        finished: this.gameDone && this.vehicle.x >= this.route.finishX,
+        failed: this.gameDone && this.vehicle.x < this.route.finishX,
+        timeMs: Math.max(0, this.time.now - this.startTime),
+        premiumStarCollected: this.premiumStarCollected,
+        ...this.duelStats,
+      },
+    });
+  }
+
+  emitDuelHud(status = 'RUNNING') {
+    if (!this.duelMode) return;
+    if (status === 'RUNNING' && this.time.now - this.duelLastHudAt < 300) return;
+    this.duelLastHudAt = this.time.now;
+    this.onGameEvent({ type: 'duel_hud', heldPowerup: this.duelHeldPowerup, stats: this.duelStats, status });
   }
 
   addReadabilityMarkers() {
@@ -718,9 +998,13 @@ class PearScene extends Phaser.Scene {
       right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
       d: Phaser.Input.Keyboard.KeyCodes.D,
       space: Phaser.Input.Keyboard.KeyCodes.SPACE,
+      e: Phaser.Input.Keyboard.KeyCodes.E,
+      shift: Phaser.Input.Keyboard.KeyCodes.SHIFT,
       r: Phaser.Input.Keyboard.KeyCodes.R,
     });
     this.input.keyboard?.on('keydown-SPACE', () => this.launchPear());
+    this.input.keyboard?.on('keydown-E', () => this.tryUseDuelPowerup());
+    this.input.keyboard?.on('keydown-SHIFT', () => this.tryUseDuelPowerup());
     this.input.keyboard?.on('keydown-R', () => this.scene.restart());
     this.pointerSteer = 0;
     this.input.on('pointerdown', (pointer) => {
@@ -947,7 +1231,8 @@ class PearScene extends Phaser.Scene {
     };
     const currentX = vehicle.body?.velocity?.x || 0;
     const accel = profile.acceleration * (recovery ? 0.55 : 1) * 60 * dt;
-    const nextX = Phaser.Math.Clamp(Phaser.Math.Linear(currentX, profile.targetSpeed, accel), profile.minForwardVelocity * 0.8, profile.targetSpeed + 0.6);
+    const turbo = this.duelTurboUntil > this.time.now ? 1.22 : 1;
+    const nextX = Phaser.Math.Clamp(Phaser.Math.Linear(currentX, profile.targetSpeed * turbo, accel), profile.minForwardVelocity * 0.8, profile.targetSpeed * turbo + 0.8);
     vehicle.setVelocity(nextX, vehicle.body?.velocity?.y || 0);
     this.preventVehicleReverse(vehicle, profile);
     this.applyVehicleGrip(vehicle, input, profile, dt);
@@ -997,6 +1282,7 @@ class PearScene extends Phaser.Scene {
     this.launchStartPosition = { x: this.pear.x, y: this.pear.y };
     this.previousPearPosition = { ...this.launchStartPosition };
     const rocketBoost = this.currentVehicleType === 'rocket' ? 1.1 : 1;
+    const duelJumpFactor = this.duelJumpSabotageUntil > this.time.now ? 0.72 : 1;
     if (next) {
       const transition = this.activeTransfer;
       const dx = Math.max(240, next.x - launchX);
@@ -1005,9 +1291,9 @@ class PearScene extends Phaser.Scene {
       const frames = Phaser.Math.Clamp(dx / (PEAR_LAUNCH_FORCE + this.speed * 0.65), 36, 74) * arc.lift;
       const vx = Phaser.Math.Clamp(dx / frames, 8.6, 24) * rocketBoost;
       const vy = ((targetY - launchY) - 0.5 * PEAR_FLIGHT_GRAVITY * frames * frames) / frames;
-      this.pear.setVelocity(vx, Phaser.Math.Clamp(vy, -9.2, -1.4));
+      this.pear.setVelocity(vx * duelJumpFactor, Phaser.Math.Clamp(vy * duelJumpFactor, -9.2, -1.0));
     } else {
-      this.pear.setVelocity((PEAR_LAUNCH_FORCE + this.speed * 0.58) * rocketBoost, -PEAR_LAUNCH_ARC);
+      this.pear.setVelocity((PEAR_LAUNCH_FORCE + this.speed * 0.58) * rocketBoost * duelJumpFactor, -PEAR_LAUNCH_ARC * duelJumpFactor);
     }
     this.pear.setAngularVelocity(0.32);
     this.tweens.add({ targets: this.pear, scaleX: 0.82, scaleY: 1.22, duration: 120, yoyo: true, ease: 'Back.easeOut' });
@@ -1257,6 +1543,10 @@ class PearScene extends Phaser.Scene {
       }
       this.mobileInputRef.current.jumpPressed = false;
     }
+    if (this.mobileInputRef?.current?.powerPressed) {
+      this.tryUseDuelPowerup();
+      this.mobileInputRef.current.powerPressed = false;
+    }
     if (steer && this.time.now - this.lastTurnSoundAt > 180) {
       this.lastTurnSoundAt = this.time.now;
       playSound('turn');
@@ -1282,6 +1572,10 @@ class PearScene extends Phaser.Scene {
     }
 
     this.updateCamera();
+    this.collectDuelPowerups();
+    this.processDuelEvents();
+    this.updateRemoteDuelPlayers();
+    this.sendDuelSnapshot();
     this.collectCoins();
     this.checkPremiumStarCollect();
     this.checkNearMisses();
@@ -1293,6 +1587,7 @@ class PearScene extends Phaser.Scene {
     this.checkFinish();
     this.updateVehicleDebug();
     this.emitHud();
+    this.emitDuelHud();
     this.previousPearPosition = this.launched ? { x: this.pear.x, y: this.pear.y } : null;
   }
 
@@ -1320,7 +1615,8 @@ class PearScene extends Phaser.Scene {
       const flightDistance = this.launched && this.previousPearPosition
         ? distanceToSegment({ x: coin.x, y: coin.y }, this.previousPearPosition, { x: target.x, y: target.y })
         : Infinity;
-      if (Math.min(currentDistance, flightDistance) < 48) {
+      const pickupRadius = this.duelMagnetUntil > this.time.now ? 118 : 48;
+      if (Math.min(currentDistance, flightDistance) < pickupRadius) {
         coin.setData('collected', true);
         coin.destroy();
         this.collectedCoins += 1;
@@ -1559,6 +1855,7 @@ class PearScene extends Phaser.Scene {
     this.tweens.add({ targets: this.pear, y: this.pear.y - 28, scale: 1.12, duration: 220, yoyo: true, repeat: 3, ease: 'Sine.easeInOut' });
     floatingText(this, this.vehicle.x, this.vehicle.y - 90, this.pearDamage <= 0 ? 'PERFECT!' : 'GRUSZKA ŻYJE!', '#ffffff', 30);
     playSound('win');
+    this.sendDuelSnapshot(true);
     this.time.delayedCall(520, () => {
       this.onGameEvent({
         type: 'win',
@@ -1577,7 +1874,11 @@ class PearScene extends Phaser.Scene {
         premiumStarBonus: this.premiumStarCollected ? Number(this.level.premiumStar?.scoreBonus || 0) : 0,
         isLast: this.levelIndex >= levels.length - 1,
         legendary: this.levelIndex >= levels.length - 1,
+        duelStats: this.duelMode ? this.duelStats : undefined,
       });
+      if (this.duelMode) {
+        this.onGameEvent({ type: 'duel_finished', score: totalScore, timeMs: totalTime, stats: this.duelStats });
+      }
     });
   }
 
@@ -1602,6 +1903,7 @@ class PearScene extends Phaser.Scene {
     this.tweens.add({ targets: this.pear, scaleX: 1.38, scaleY: 0.58, angle: -8, duration: 160, ease: 'Bounce.easeOut' });
     floatingText(this, this.pear.x, this.pear.y - 54, message, '#ffef8a', 30);
     playSound('lose');
+    this.sendDuelSnapshot(true);
     this.onGameEvent({
       type: 'lose',
       level: this.levelIndex + 1,
@@ -1611,7 +1913,11 @@ class PearScene extends Phaser.Scene {
       comboMax: this.maxCombo,
       coinsCollected: this.collectedCoins,
       nearMisses: this.nearMissCount,
+      duelStats: this.duelMode ? this.duelStats : undefined,
     });
+    if (this.duelMode) {
+      this.onGameEvent({ type: 'duel_failed', score: this.score, stats: this.duelStats });
+    }
   }
 
   emitHud() {
@@ -1625,11 +1931,12 @@ class PearScene extends Phaser.Scene {
       pearDamage: this.pearDamage,
       canLaunch: !this.launched && !this.gameDone,
       distance: Math.max(0, Math.round((this.vehicle?.x || 0) / 10)),
+      duelHeldPowerup: this.duelHeldPowerup,
     });
   }
 }
 
-export function createGame(parent, onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false, mobileInputRef = null, showTouchHints = false) {
+export function createGame(parent, onGameEvent, initialLevel = 0, soundEnabled = true, performanceMode = false, mobileInputRef = null, showTouchHints = false, duelOptions = null) {
   return new Phaser.Game({
     type: Phaser.AUTO,
     parent,
@@ -1650,6 +1957,6 @@ export function createGame(parent, onGameEvent, initialLevel = 0, soundEnabled =
     input: {
       activePointers: performanceMode ? 2 : 3,
     },
-    scene: [new PearScene(onGameEvent, initialLevel, soundEnabled, performanceMode, mobileInputRef, showTouchHints)],
+    scene: [new PearScene(onGameEvent, initialLevel, soundEnabled, performanceMode, mobileInputRef, showTouchHints, duelOptions)],
   });
 }

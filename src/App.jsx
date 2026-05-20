@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { levels } from './game/levels.js';
 import { MAX_LEVEL } from './game/constants.js';
 import { runCampaignSanityCheck } from './game/campaignSanity.js';
@@ -10,11 +10,14 @@ import LoginPanel from './components/LoginPanel.jsx';
 import ProfilePanel from './components/ProfilePanel.jsx';
 import LeaderboardPanel from './components/LeaderboardPanel.jsx';
 import FriendsPanel from './components/FriendsPanel.jsx';
+import DuelPanel from './components/DuelPanel.jsx';
+import DuelLiveOverlay from './components/DuelLiveOverlay.jsx';
 import { getSession, onAuthStateChange, signOut } from './services/authService.js';
 import { ensureProfile, getProfile } from './services/profileService.js';
 import { flushPendingScores, queuePendingScore, submitOnlineScore } from './services/scoreService.js';
 import { isOnline, onOnline, onOffline } from './services/networkService.js';
 import { canUseFullscreen, isFullscreen, toggleFullscreen } from './services/fullscreenService.js';
+import { clearHeldPowerup, finishDuelRoom, sendDuelEvent, sendPlayerSnapshot, subscribeDuelEvents, subscribePlayers } from './services/duelService.js';
 
 const GameShell = lazy(() => import('./components/GameShell.jsx'));
 
@@ -108,6 +111,12 @@ export default function App() {
     };
   }, []);
   const [leaderboardDefaults, setLeaderboardDefaults] = useState({ defaultTab: 'global', defaultLevel: 'all', defaultWorld: 'all' });
+  const [duelRoom, setDuelRoom] = useState(null);
+  const [duelPlayers, setDuelPlayers] = useState([]);
+  const [duelEvents, setDuelEvents] = useState([]);
+  const [duelHud, setDuelHud] = useState({ heldPowerup: null, status: 'LOBBY', stats: {} });
+  const duelPlayersRef = useRef([]);
+  const duelEventsRef = useRef([]);
 
   const highestUnlocked = Math.min(save.unlockedLevel, levels.length, MAX_LEVEL);
   const totalStars = useMemo(
@@ -118,6 +127,14 @@ export default function App() {
     () => Object.values(save.premiumStarsByLevel || {}).filter(Boolean).length,
     [save.premiumStarsByLevel],
   );
+
+  React.useEffect(() => {
+    duelPlayersRef.current = duelPlayers;
+  }, [duelPlayers]);
+
+  React.useEffect(() => {
+    duelEventsRef.current = duelEvents;
+  }, [duelEvents]);
 
   React.useEffect(() => {
     if (import.meta.env.DEV || devParams.debug) {
@@ -170,6 +187,18 @@ export default function App() {
       unsubscribeOffline();
     };
   }, [session?.user?.id]);
+
+  React.useEffect(() => {
+    if (!duelRoom?.id) return undefined;
+    const unsubPlayers = subscribePlayers(duelRoom.id, setDuelPlayers);
+    const unsubEvents = subscribeDuelEvents(duelRoom.id, (event) => {
+      setDuelEvents((current) => [...current.slice(-60), event]);
+    });
+    return () => {
+      unsubPlayers();
+      unsubEvents();
+    };
+  }, [duelRoom?.id]);
 
   React.useEffect(() => {
     localStorage.setItem(PERFORMANCE_STORAGE_KEY, JSON.stringify(performanceMode));
@@ -232,6 +261,31 @@ export default function App() {
     setScreen('game');
   }
 
+  function startDuelGame({ room, players = [], levelId }) {
+    const safeLevelId = Math.min(MAX_LEVEL, Math.max(1, Number(levelId || room?.level_id || 1)));
+    playSound('ui');
+    setDuelRoom(room);
+    setDuelPlayers(players);
+    setDuelEvents([]);
+    setDuelHud({ heldPowerup: null, status: 'START', stats: {} });
+    setResult(null);
+    setPaused(false);
+    setSkipAvailable(false);
+    setSelectedLevel(safeLevelId);
+    setHud({
+      level: safeLevelId,
+      score: 0,
+      combo: 1,
+      vehicle: 'Drewniana Katapulta',
+      pearHealth: 100,
+      canLaunch: true,
+      distance: 0,
+      best: save.bestScore,
+    });
+    setRunId((value) => value + 1);
+    setScreen('duelGame');
+  }
+
   function playUnlocked() {
     startLevel(highestUnlocked);
   }
@@ -285,6 +339,8 @@ export default function App() {
     playSound('ui');
     setPaused(false);
     setResult(null);
+    setDuelRoom(null);
+    setDuelHud({ heldPowerup: null, status: 'LOBBY', stats: {} });
     setScreen('menu');
   }
 
@@ -339,6 +395,62 @@ export default function App() {
   }
 
   function handleGameEvent(event) {
+    if (event.type === 'duel_hud') {
+      setDuelHud({ heldPowerup: event.heldPowerup, status: event.status, stats: event.stats || {} });
+      return;
+    }
+
+    if (event.type === 'duel_snapshot' && duelRoom?.id && session?.user) {
+      sendPlayerSnapshot(duelRoom.id, session.user.id, event.snapshot).catch(() => {});
+      return;
+    }
+
+    if (event.type === 'duel_powerup_collected' && duelRoom?.id && session?.user) {
+      sendDuelEvent(duelRoom.id, {
+        type: 'powerup_collected',
+        senderUserId: session.user.id,
+        powerupId: event.powerupId,
+        powerupType: event.powerup?.type,
+      }).catch(() => {});
+      return;
+    }
+
+    if (event.type === 'duel_powerup_used' && duelRoom?.id && session?.user) {
+      sendDuelEvent(duelRoom.id, {
+        type: 'powerup_used',
+        senderUserId: session.user.id,
+        targetUserId: event.targetUserId,
+        targetTeam: event.powerup?.type === 'team_boost' ? duelPlayers.find((player) => player.user_id === session.user.id)?.team : event.targetTeam,
+        powerupType: event.powerup?.type,
+        x: event.x,
+        y: event.y,
+        effectDurationMs: event.powerup?.durationMs,
+      }).catch(() => {});
+      clearHeldPowerup(duelRoom.id, session.user.id).catch(() => {});
+      setDuelHud({ heldPowerup: null, status: 'POWER USED', stats: event.stats || {} });
+      return;
+    }
+
+    if ((event.type === 'duel_finished' || event.type === 'duel_failed') && duelRoom?.id && session?.user) {
+      const teamTotals = ['A', 'B'].map((team) => ({
+        team,
+        score: duelPlayers
+          .filter((player) => player.team === team)
+          .reduce((sum, player) => sum + Number(player.score || 0) + (player.finished ? 1500 : 0), 0),
+      }));
+      const winner = teamTotals.sort((a, b) => b.score - a.score)[0]?.team || null;
+      sendDuelEvent(duelRoom.id, {
+        type: event.type === 'duel_finished' ? 'player_finished' : 'player_failed',
+        senderUserId: session.user.id,
+        score: event.score,
+        stats: event.stats,
+      }).catch(() => {});
+      if (duelRoom.host_user_id === session.user.id) {
+        finishDuelRoom(duelRoom.id, winner).catch(() => {});
+      }
+      return;
+    }
+
     if (event.type === 'hud') {
       setHud((current) => ({
         ...current,
@@ -355,6 +467,22 @@ export default function App() {
 
     if (event.type === 'skip') {
       setSkipAvailable(event.available);
+    }
+
+    if (screen === 'duelGame' && event.type === 'win') {
+      const currentTeam = duelPlayers.find((player) => player.user_id === session?.user?.id)?.team || 'A';
+      setHud((current) => ({ ...current, score: event.totalScore }));
+      setResult({
+        ...event,
+        type: 'win',
+        duelMode: true,
+        winnerTeam: currentTeam,
+        teamScoreA: duelPlayers.filter((player) => player.team === 'A').reduce((sum, player) => sum + Number(player.score || 0), event.totalScore && currentTeam === 'A' ? event.totalScore : 0),
+        teamScoreB: duelPlayers.filter((player) => player.team === 'B').reduce((sum, player) => sum + Number(player.score || 0), event.totalScore && currentTeam === 'B' ? event.totalScore : 0),
+        duelStats: event.duelStats || duelHud.stats || {},
+      });
+      setPaused(false);
+      return;
     }
 
     if (event.type === 'win') {
@@ -499,6 +627,7 @@ export default function App() {
           <div className="menu-actions">
             <button className="secondary-button" onClick={() => setScreen('levels')}>Poziomy</button>
             <button className="secondary-button" onClick={() => setScreen('leaderboard')}>Ranking</button>
+            <button className="secondary-button" onClick={() => setScreen('duel')}>DUEL PvP</button>
             <button className="secondary-button" onClick={() => setScreen('friends')}>Znajomi</button>
             <button className="secondary-button" onClick={() => setScreen('profile')}>Profil</button>
             <button className="secondary-button" onClick={() => setScreen('howto')}>Jak grać</button>
@@ -589,6 +718,21 @@ export default function App() {
         </section>
       )}
 
+      {screen === 'duel' && (
+        <section className="panel-screen">
+          <div className="panel-header">
+            <h2>DUEL PvP</h2>
+            <button className="secondary-button compact" onClick={() => setScreen('menu')}>Menu</button>
+          </div>
+          <DuelPanel
+            session={session}
+            profile={profile}
+            onStartDuel={startDuelGame}
+            onBack={() => setScreen('menu')}
+          />
+        </section>
+      )}
+
       {screen === 'levels' && (
         <section className="panel-screen">
           <div className="panel-header">
@@ -634,6 +778,7 @@ export default function App() {
             <li>D lub strzałka prawo skręca w prawo.</li>
             <li>Spacja wystrzeliwuje gruszkę na następny pojazd.</li>
             <li>Na telefonie używaj przycisków góra/dół oraz SKOK.</li>
+            <li>W DUEL PvP używaj POWER nad SKOK na telefonie albo E/Shift na desktopie.</li>
             <li>Przycisk WYSTRZAŁ na HUD odpala gruszkę.</li>
             <li>Zbieraj pestki, jedź blisko przeszkód i utrzymuj combo.</li>
             <li>Na każdym poziomie ukryta jest jedna Złota Gwiazda Premium. Jest bardzo trudna do zdobycia, ale daje duży bonus.</li>
@@ -646,8 +791,8 @@ export default function App() {
         </section>
       )}
 
-      {screen === 'game' && (
-        <section className="game-screen">
+      {(screen === 'game' || screen === 'duelGame') && (
+        <section className={`game-screen ${screen === 'duelGame' ? 'duel-game-screen' : ''}`}>
           <div className="hud">
             <span>Poziom {hud.level}</span>
             <span>Wynik {hud.score}</span>
@@ -669,8 +814,8 @@ export default function App() {
           <div className="rotate-notice">Obróć telefon, żeby grać wygodniej.</div>
           {/* decide whether mobile controls should be visible/disabled */}
           {(() => {
-            const hasOpenOverlay = screen !== 'game' || showSplash || Boolean(result) || paused;
-            const gameActive = screen === 'game' && !showSplash;
+            const hasOpenOverlay = !(screen === 'game' || screen === 'duelGame') || showSplash || Boolean(result) || paused;
+            const gameActive = (screen === 'game' || screen === 'duelGame') && !showSplash;
             const mobileControlsVisible = Boolean(touchControlsEnabled || touchDevice) && gameActive;
             const mobileControlsDisabled = !gameActive || hasOpenOverlay || Boolean(result) || paused;
             return (
@@ -686,10 +831,29 @@ export default function App() {
                   touchControlsEnabled={touchControlsEnabled}
                   mobileControlsVisible={mobileControlsVisible}
                   mobileControlsDisabled={mobileControlsDisabled}
+                  duelOptions={screen === 'duelGame' ? {
+                    duelMode: true,
+                    duelRoomId: duelRoom?.id,
+                    duelPlayerId: session?.user?.id,
+                    duelTeam: duelPlayers.find((player) => player.user_id === session?.user?.id)?.team || 'A',
+                    duelPlayers,
+                    remotePlayersRef: duelPlayersRef,
+                    duelEventsRef,
+                    heldPowerup: duelHud?.heldPowerup,
+                  } : null}
                 />
               </Suspense>
             );
           })()}
+          {screen === 'duelGame' && (
+            <DuelLiveOverlay
+              room={duelRoom}
+              players={duelPlayers}
+              currentUserId={session?.user?.id}
+              heldPowerup={duelHud?.heldPowerup}
+              duelHud={duelHud}
+            />
+          )}
           {skipAvailable && !paused && !result && (
             <button className="skip-button" onClick={launchPear}>Wystrzał</button>
           )}
@@ -713,7 +877,7 @@ export default function App() {
             <div className={`overlay-panel result-screen ${result.level === 50 ? 'result-legendary' : 'result-win'}`} role="dialog" aria-modal>
               <div className="result-card">
                 <h2 className="result-title">
-                  {result.level === 50 ? 'GRUSZKA ZOSTAŁA LEGENDĄ!' : result.perfectRun ? 'PERFECT RUN!' : 'POZIOM UKOŃCZONY!'}
+                  {result.duelMode ? `DUEL FINISH - TEAM ${result.winnerTeam || '?'}` : result.level === 50 ? 'GRUSZKA ZOSTAŁA LEGENDĄ!' : result.perfectRun ? 'PERFECT RUN!' : 'POZIOM UKOŃCZONY!'}
                 </h2>
 
                 <div className="result-stars" aria-hidden>
@@ -739,6 +903,10 @@ export default function App() {
                   <div className="result-stat"><strong>Czas</strong><span>{typeof result.timeMs === 'number' ? `${Math.round(result.timeMs / 1000)}s` : '—'}</span></div>
                   <div className="result-stat"><strong>Perfect</strong><span>{result.perfectRun ? 'TAK' : 'NIE'}</span></div>
                   <div className="result-stat result-premium-star"><strong>Gwiazda Premium</strong><span>{result.premiumStarCollected ? 'zdobyta' : 'niezdobyta'}</span></div>
+                  {result.duelMode && <div className="result-stat"><strong>Team A</strong><span>{result.teamScoreA || 0}</span></div>}
+                  {result.duelMode && <div className="result-stat"><strong>Team B</strong><span>{result.teamScoreB || 0}</span></div>}
+                  {result.duelMode && <div className="result-stat"><strong>Ataki</strong><span>{result.duelStats?.hitsDealt || 0}</span></div>}
+                  {result.duelMode && <div className="result-stat"><strong>Obrona</strong><span>{result.duelStats?.shieldsUsed || 0}</span></div>}
                 </div>
 
                 <div className="result-bonuses">
@@ -761,10 +929,13 @@ export default function App() {
                 </div>
 
                 <div className="result-actions">
-                  {!((result.level === 50) || (save.unlockedLevel < result.level + 1)) && result.level < MAX_LEVEL && (
+                  {result.duelMode && (
+                    <button className="primary-button" onClick={() => setScreen('duel')}>Lobby DUEL</button>
+                  )}
+                  {!result.duelMode && !((result.level === 50) || (save.unlockedLevel < result.level + 1)) && result.level < MAX_LEVEL && (
                     <button className="primary-button" onClick={nextLevel}>Następny poziom</button>
                   )}
-                  {result.level === MAX_LEVEL && (
+                  {!result.duelMode && result.level === MAX_LEVEL && (
                     <button className="primary-button" onClick={() => startLevel(1)}>Graj od nowa</button>
                   )}
                   <button className="secondary-button" onClick={restartLevel}>Restart</button>

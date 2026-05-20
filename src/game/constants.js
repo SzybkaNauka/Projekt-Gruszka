@@ -129,3 +129,38 @@ export const LEVEL_TIER_CONFIG = {
 };
 
 export const PRE_START_COUNTDOWN_MS = 5000;
+
+export const DUEL_EVENT_SEND_INTERVAL_MS = 150;
+export const DUEL_POSITION_SEND_INTERVAL_MS = 150;
+export const DUEL_SCORE_SEND_INTERVAL_MS = 750;
+export const DUEL_ATTACK_GRACE_MS = 3000;
+export const DUEL_HIT_INVULNERABILITY_MS = 1200;
+export const DUEL_MAX_HELD_POWERUPS = 1;
+export const DUEL_POWERUP_RESPAWN_MS = 8000;
+export const DUEL_TRAP_WARNING_MS = 800;
+
+export const DUEL_MODES = {
+  '1v1': { label: '1v1', maxPlayers: 2, teamSize: 1 },
+  '2v2': { label: '2v2', maxPlayers: 4, teamSize: 2 },
+  '3v3': { label: '3v3', maxPlayers: 6, teamSize: 3 },
+  '4v4': { label: '4v4', maxPlayers: 8, teamSize: 4 },
+  '5v5': { label: '5v5', maxPlayers: 10, teamSize: 5 },
+};
+
+export const DUEL_POWERUPS = {
+  rotten_tomato: { type: 'rotten_tomato', name: 'Zgnily Pomidor', category: 'attack', cooldownMs: 3400, durationMs: 1500, color: 0xe64135 },
+  onion_tear: { type: 'onion_tear', name: 'Cebulowa Lza', category: 'trap', cooldownMs: 3800, durationMs: 2600, color: 0xd5b2ff },
+  carrot_spike: { type: 'carrot_spike', name: 'Marchewkowy Kolec', category: 'trap', cooldownMs: 4200, durationMs: 5000, color: 0xff8a22 },
+  broccoli_wall: { type: 'broccoli_wall', name: 'Brokulowa Barykada', category: 'trap', cooldownMs: 5200, durationMs: 5200, color: 0x3e9b45 },
+  pumpkin_mine: { type: 'pumpkin_mine', name: 'Dyniowa Mina', category: 'trap', cooldownMs: 7000, durationMs: 6500, color: 0xf08a25 },
+  pear_shield: { type: 'pear_shield', name: 'Tarcza Gruszki', category: 'defense', cooldownMs: 5000, durationMs: 3000, color: 0x6bd6ff },
+  anti_slip: { type: 'anti_slip', name: 'Anty-poslizg', category: 'defense', cooldownMs: 4600, durationMs: 4000, color: 0x9df75b },
+  reflect_attack: { type: 'reflect_attack', name: 'Odbicie Ataku', category: 'defense', cooldownMs: 8200, durationMs: 3500, color: 0xfff3a6 },
+  turbo_juice: { type: 'turbo_juice', name: 'Turbo Sok', category: 'boost', cooldownMs: 4300, durationMs: 1600, color: 0xffd34a },
+  magnet_seed: { type: 'magnet_seed', name: 'Magnetyczna Pestka', category: 'boost', cooldownMs: 4800, durationMs: 5000, color: 0xf4d75c },
+  team_boost: { type: 'team_boost', name: 'Team Boost', category: 'team_support', cooldownMs: 9000, durationMs: 2200, color: 0x74e35c },
+  veggie_fog: { type: 'veggie_fog', name: 'Warzywna Mgla', category: 'chaos', cooldownMs: 5200, durationMs: 2000, color: 0xcfd8dc },
+  lane_swap: { type: 'lane_swap', name: 'Zamiana Toru', category: 'chaos', cooldownMs: 5600, durationMs: 900, color: 0xb9b9ff },
+  combo_steal: { type: 'combo_steal', name: 'Kradziez Combo', category: 'chaos', cooldownMs: 6200, durationMs: 0, color: 0x8c4bc6 },
+  sabotage_jump: { type: 'sabotage_jump', name: 'Sabotaz Skoku', category: 'chaos', cooldownMs: 6800, durationMs: 1000, color: 0x22242b },
+};

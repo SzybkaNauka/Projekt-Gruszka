@@ -820,6 +820,160 @@ button:disabled {
   color: #284a27;
 }
 
+.duel-panel {
+  text-align: left;
+}
+
+.duel-panel-head,
+.duel-room-title,
+.duel-player-row,
+.duel-list-row,
+.duel-team-score,
+.duel-held-power,
+.duel-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.duel-panel-head p {
+  margin: 6px 0 0;
+  font-weight: 850;
+  color: #5d5636;
+}
+
+.duel-setup-grid,
+.duel-browser-grid,
+.duel-teams {
+  display: grid;
+  gap: 12px;
+}
+
+.duel-setup-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.duel-setup-grid label {
+  display: grid;
+  gap: 6px;
+  font-weight: 950;
+}
+
+.duel-code-form {
+  display: flex;
+  gap: 8px;
+}
+
+.duel-room-card,
+.duel-browser-grid > div,
+.duel-team {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.68);
+  box-shadow: inset 0 0 0 2px rgba(40,74,39,0.08);
+}
+
+.duel-teams,
+.duel-browser-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.duel-player-row,
+.duel-list-row {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #203020;
+  background: #fff9d8;
+  box-shadow: 0 4px 0 rgba(74,98,38,0.16);
+  text-align: left;
+}
+
+.team-a {
+  color: #0a5c78;
+}
+
+.team-b {
+  color: #963432;
+}
+
+.duel-live-overlay {
+  position: absolute;
+  z-index: 7;
+  top: 76px;
+  left: 12px;
+  width: min(420px, calc(100% - 24px));
+  display: grid;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.duel-team-score,
+.duel-held-power,
+.duel-progress-list {
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #fff9d8;
+  background: rgba(25, 35, 21, 0.82);
+  box-shadow: 0 4px 0 rgba(20,26,15,0.28);
+  font-weight: 950;
+}
+
+.duel-held-power strong {
+  color: #ffd34a;
+}
+
+.duel-progress-list {
+  display: grid;
+  gap: 6px;
+}
+
+.duel-progress-row {
+  font-size: 12px;
+}
+
+.duel-progress-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.2);
+}
+
+.duel-progress-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #ffd34a;
+}
+
+.duel-progress-row.team-b .duel-progress-bar i {
+  background: #ff7a6d;
+}
+
+@media (max-width: 760px) {
+  .duel-live-overlay {
+    top: 70px;
+    left: 8px;
+    width: min(330px, calc(100% - 116px));
+    gap: 6px;
+  }
+
+  .duel-progress-list {
+    display: none;
+  }
+
+  .duel-team-score,
+  .duel-held-power {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}
+
 .profile-panel {
   gap: 18px;
 }
@@ -908,9 +1062,19 @@ button:disabled {
   box-shadow: 0 10px 0 rgba(125,74,42,0.6);
   pointer-events: auto;
 }
+.mobile-power-button {
+  min-width: 76px;
+  min-height: 48px;
+  border-radius: 999px;
+  color: #fff9d8;
+  background: linear-gradient(180deg, #7d4a2a, #4a2b1a);
+  box-shadow: 0 7px 0 rgba(25, 16, 8, 0.58), 0 0 18px rgba(255, 211, 74, 0.32);
+  pointer-events: auto;
+}
 .mobile-controls.disabled { opacity: 0.48; pointer-events: none; }
 .mobile-control-button.active { transform: scale(0.92); box-shadow: 0 4px 0 rgba(0,0,0,0.16); }
 .mobile-jump-button.active { transform: scale(0.96); box-shadow: 0 6px 0 rgba(0,0,0,0.18); }
+.mobile-power-button.active { transform: scale(0.94); box-shadow: 0 4px 0 rgba(0,0,0,0.22); }
 .mobile-controls {
   position: absolute;
   inset: auto 0 0 0;
@@ -931,6 +1095,9 @@ button:disabled {
   position: absolute;
   right: 12px;
   bottom: 18px;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
   pointer-events: auto;
 }
 

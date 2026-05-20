@@ -3,11 +3,11 @@ import { createGame } from '../game/createGame.js';
 import { setAudioEnabled } from '../game/audio.js';
 import MobileControls from './MobileControls.jsx';
 
-export default function GameShell({ initialLevel, paused, soundEnabled, skipToken, performanceMode, onGameEvent, touchControlsEnabled = false, mobileControlsVisible = true, mobileControlsDisabled = false }) {
+export default function GameShell({ initialLevel, paused, soundEnabled, skipToken, performanceMode, onGameEvent, touchControlsEnabled = false, mobileControlsVisible = true, mobileControlsDisabled = false, duelOptions = null }) {
   const hostRef = useRef(null);
   const gameRef = useRef(null);
   const eventRef = useRef(onGameEvent);
-  const mobileInputRef = useRef({ left: false, right: false, up: false, down: false, jump: false, jumpHeld: false, jumpPressed: false });
+  const mobileInputRef = useRef({ left: false, right: false, up: false, down: false, jump: false, jumpHeld: false, jumpPressed: false, power: false, powerPressed: false });
 
   eventRef.current = onGameEvent;
 
@@ -16,7 +16,7 @@ export default function GameShell({ initialLevel, paused, soundEnabled, skipToke
     if (!hostRef.current) return undefined;
     console.log('[GameShell] create attempt', { initialLevel, touchControlsEnabled, hasContainer: !!hostRef.current });
     try {
-      const game = createGame(hostRef.current, (event) => eventRef.current(event), initialLevel, soundEnabled, performanceMode, mobileInputRef, touchControlsEnabled);
+      const game = createGame(hostRef.current, (event) => eventRef.current(event), initialLevel, soundEnabled, performanceMode, mobileInputRef, touchControlsEnabled, duelOptions);
       gameRef.current = game;
       console.log('[GameShell] createGame returned', { gameCreated: !!game });
       setStartError(null);
@@ -30,7 +30,7 @@ export default function GameShell({ initialLevel, paused, soundEnabled, skipToke
       try { gameRef.current?.destroy(true); } catch (e) {}
       gameRef.current = null;
     };
-  }, [initialLevel]);
+  }, [initialLevel, duelOptions?.duelRoomId, duelOptions?.duelMode]);
 
   useEffect(() => {
     const scene = gameRef.current?.scene?.getScene('PearScene');
@@ -63,7 +63,13 @@ export default function GameShell({ initialLevel, paused, soundEnabled, skipToke
           <p>Konsola przeglądarki może zawierać więcej informacji.</p>
         </div>
       )}
-      <MobileControls mobileInputRef={mobileInputRef} visible={mobileControlsVisible} disabled={mobileControlsDisabled} />
+      <MobileControls
+        mobileInputRef={mobileInputRef}
+        visible={mobileControlsVisible}
+        disabled={mobileControlsDisabled}
+        showPower={Boolean(duelOptions?.duelMode)}
+        powerLabel={duelOptions?.heldPowerup ? 'ATAK' : 'POWER'}
+      />
     </>
   );
 }

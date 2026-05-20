@@ -75,6 +75,21 @@ Auth Supabase działa w WebView jako web auth.
 - Friends leaderboard
 - Pending offline scores
 - Friend requests
+- DUEL PvP arcade realtime: pokoje 1v1-5v5, ghosty graczy, power-upy, trap eventy, team score i zaproszenia po username.
+
+## DUEL PvP
+
+DUEL PvP to nie jest live ranking. Gracze jada na tej samej mapie PvP, widza przeciwnikow jako ghost/pojazdy, zbieraja power-upy i wysylaja eventy atakow przez Supabase Realtime.
+
+- Snapshot pozycji/progresu idzie co ok. 150 ms.
+- Fizyka zostaje lokalna, bez synchronizacji Matter co klatke.
+- Eventy `powerup_used`, `trap_spawned`, `attack_hit`, `player_finished` i podobne sa zapisywane w `duel_events`.
+- Mobile ma osobny przycisk `POWER` nad `SKOK`.
+- Desktop uzywa `E` albo `Shift` do POWER.
+- Email nie jest publiczny; DUEL pokazuje tylko username/display_name/avatar.
+- `supabase/schema.sql` dodaje `duel_rooms`, `duel_players`, `duel_events`, `duel_invites` oraz flagi `allow_random_invites`, `last_seen_at`, `duel_status`.
+
+TODO po stronie backendu, gdy PvP bedzie competitive: Edge Function do finalizacji wyniku, server-side anti-cheat i podpisywane eventy.
 
 ## QA / dev helpers
 

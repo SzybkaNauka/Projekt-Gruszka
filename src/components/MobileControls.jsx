@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 
-const EMPTY_INPUT = { left: false, right: false, up: false, down: false, jump: false, jumpHeld: false, jumpPressed: false };
+const EMPTY_INPUT = { left: false, right: false, up: false, down: false, jump: false, jumpHeld: false, jumpPressed: false, power: false, powerPressed: false };
 
-export default function MobileControls({ mobileInputRef, visible = true, disabled = false }) {
+export default function MobileControls({ mobileInputRef, visible = true, disabled = false, showPower = false, powerLabel = 'POWER' }) {
   const pointerMap = useRef({});
   const [active, setActive] = React.useState({});
 
@@ -31,6 +31,9 @@ export default function MobileControls({ mobileInputRef, visible = true, disable
       mobileInputRef.current.jump = value;
       mobileInputRef.current.jumpHeld = value;
       mobileInputRef.current.jumpPressed = value;
+    } else if (control === 'power') {
+      mobileInputRef.current.power = value;
+      mobileInputRef.current.powerPressed = value;
     } else {
       mobileInputRef.current[control] = value;
     }
@@ -69,6 +72,9 @@ export default function MobileControls({ mobileInputRef, visible = true, disable
       </div>
 
       <div className="mobile-actions">
+        {showPower && (
+          <button className={`mobile-power-button ${active.power ? 'active' : ''}`} data-control="power" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={onUp}>{powerLabel}</button>
+        )}
         <button className={`mobile-jump-button ${active.jump ? 'active' : ''}`} data-control="jump" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={onUp}>SKOK</button>
       </div>
     </div>

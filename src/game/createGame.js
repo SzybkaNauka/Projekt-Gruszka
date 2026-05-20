@@ -97,6 +97,11 @@ const difficultySettings = {
   extreme: { catchMultiplier: 0.84, speedSlack: 4.7 },
 };
 
+const airCurrentColors = {
+  up: 0x6bd6ff,
+  down: 0xffc857,
+};
+
 const tierCatchMinimums = {
   starter: 180,
   rookiePlus: 150,
@@ -364,6 +369,8 @@ class PearScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(4);
     });
 
+    this.airCurrents = (this.route.airCurrents || []).map((current) => this.createAirCurrent(current));
+
     this.coins = (this.route.coins || []).map((coin) => {
       const dot = createCoinSprite(this, coin.x, coin.y).setDepth(12);
       dot.setData('collected', false);
@@ -381,6 +388,54 @@ class PearScene extends Phaser.Scene {
       stroke: '#fff6c9',
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(10);
+  }
+
+  createAirCurrent(current) {
+    const color = airCurrentColors[current.direction] || airCurrentColors.up;
+    const zone = this.add.rectangle(current.x, current.y, current.width, current.height, color, 0.16).setDepth(3);
+    zone.setStrokeStyle(3, color, 0.38);
+    zone.setData('kind', 'airCurrent');
+    zone.setData('direction', current.direction);
+    zone.setData('strength', current.strength || 0.05);
+    zone.setData('bounds', {
+      left: current.x - current.width / 2,
+      right: current.x + current.width / 2,
+      top: current.y - current.height / 2,
+      bottom: current.y + current.height / 2,
+    });
+    const arrow = current.direction === 'up' ? 'WIATR W GÓRĘ' : 'WIATR W DÓŁ';
+    this.add.text(current.x, current.y, arrow, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '16px',
+      fontStyle: '900',
+      color: '#fff9d8',
+      stroke: '#24331b',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(4);
+
+    if (!this.performanceMode) {
+      const particleCount = current.direction === 'up' ? 6 : 5;
+      for (let i = 0; i < particleCount; i += 1) {
+        const stream = this.add.ellipse(
+          current.x - current.width / 2 + 36 + i * (current.width / particleCount),
+          current.y + Phaser.Math.Between(-Math.round(current.height / 3), Math.round(current.height / 3)),
+          34,
+          8,
+          color,
+          0.25,
+        ).setDepth(4).setAngle(current.direction === 'up' ? -18 : 18);
+        this.tweens.add({
+          targets: stream,
+          y: stream.y + (current.direction === 'up' ? -52 : 52),
+          alpha: 0.06,
+          duration: 900 + i * 90,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    }
+    return zone;
   }
 
   addReadabilityMarkers() {
@@ -1180,6 +1235,7 @@ class PearScene extends Phaser.Scene {
       this.pear.setScale(1 + Math.sin(this.time.now * 0.012) * 0.025, 1 - Math.sin(this.time.now * 0.012) * 0.018);
       this.animateVehicleJuice(steer);
     } else {
+      this.applyAirCurrents(dt);
       this.pear.setVelocity(this.pear.body.velocity.x, this.pear.body.velocity.y + PEAR_FLIGHT_GRAVITY * dt);
       this.addPearTrail();
       if (this.pear.y < 95 && Math.floor(this.time.now / 420) % 2 === 0) {
@@ -1231,6 +1287,29 @@ class PearScene extends Phaser.Scene {
         this.collectedCoins += 1;
         playSound('coin');
         this.addScore(100, coin.x, coin.y, '+100');
+      }
+    });
+  }
+
+  applyAirCurrents(dt = 1) {
+    if (!this.launched || !this.airCurrents?.length || !this.pear?.body) {
+      return;
+    }
+    this.airCurrents.forEach((current) => {
+      const bounds = current.getData('bounds');
+      if (!bounds) return;
+      if (this.pear.x < bounds.left || this.pear.x > bounds.right || this.pear.y < bounds.top || this.pear.y > bounds.bottom) {
+        return;
+      }
+      const direction = current.getData('direction');
+      const strength = current.getData('strength') || 0.05;
+      const push = (direction === 'up' ? -strength : strength) * dt;
+      this.pear.setVelocity(
+        this.pear.body.velocity.x,
+        Phaser.Math.Clamp(this.pear.body.velocity.y + push, -10.8, 10.8),
+      );
+      if (!this.performanceMode && Math.floor(this.time.now / 140) % 2 === 0) {
+        addDustPuff(this, this.pear.x - 10, this.pear.y + (direction === 'up' ? 18 : -18), airCurrentColors[direction] || 0x6bd6ff, 2);
       }
     });
   }

@@ -172,6 +172,38 @@ function buildObstacles({ id, theme, tierName, routeLength, road, transfers }) {
   return obstacles;
 }
 
+function buildAirCurrents({ world, transferIndex, launchCenter, targetX, road }) {
+  if (world < 2) return [];
+  const direction = (transferIndex + world) % 2 === 0 ? 'up' : 'down';
+  const opposite = direction === 'up' ? 'down' : 'up';
+  const midX = launchCenter + (targetX - launchCenter) * 0.52;
+  const y = direction === 'up' ? road.bottom - 138 : road.top + 138;
+  const strength = 0.048 + world * 0.011;
+  const currents = [{
+    id: `air-${world}-${transferIndex}-main`,
+    x: midX,
+    y,
+    width: 280 + world * 24,
+    height: 142,
+    direction,
+    strength,
+  }];
+
+  if (world >= 3) {
+    currents.push({
+      id: `air-${world}-${transferIndex}-counter`,
+      x: midX + 250 + transferIndex * 18,
+      y: opposite === 'up' ? road.bottom - 148 : road.top + 148,
+      width: 210 + world * 16,
+      height: 118,
+      direction: opposite,
+      strength: strength * 0.72,
+    });
+  }
+
+  return currents;
+}
+
 function buildLevel(id) {
   const world = Math.floor((id - 1) / 10);
   const tierName = tierByWorld[world];
@@ -186,6 +218,7 @@ function buildLevel(id) {
   const transitions = [];
   const vehicles = [];
   const gaps = [];
+  const airCurrents = [];
   const coins = [
     ...coinLine(430, startY, 6 + Math.min(5, world), 78, 18 + world * 5),
   ];
@@ -218,10 +251,8 @@ function buildLevel(id) {
       x: targetX,
       y: targetY,
       required: true,
-      moveY: world >= 2 && i % 2 === 0 ? 38 + world * 8 : 0,
-      moveX: world >= 4 && i === 1 ? 42 : 0,
-      moveDuration: Math.max(1350, 2150 - world * 190 - i * 80),
     });
+    airCurrents.push(...buildAirCurrents({ world, transferIndex: i, launchCenter, targetX, road }));
     gaps.push({
       x: launchCenter + 150,
       width: 180 + world * 45 + i * 18,
@@ -267,6 +298,7 @@ function buildLevel(id) {
       coins,
       collectibles: coins,
       obstacles,
+      airCurrents,
       signs: transitions.map((item) => ({ type: 'jump', x: item.launchZoneX.start, text: 'SKACZ!' })),
       background: { theme: themeConfig.theme, tier: world + 1 },
       scoring: { scoreMultiplier: tier.score },

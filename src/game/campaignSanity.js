@@ -48,6 +48,7 @@ export function validateLevel(level) {
   const vehicles = route.vehicles || [];
   const obstacles = route.obstacles || [];
   const collectibles = route.collectibles || route.coins || [];
+  const airCurrents = route.airCurrents || [];
   const thresholds = level?.starThresholds;
 
   if (!level?.id) errors.push('missing id');
@@ -73,6 +74,7 @@ export function validateLevel(level) {
 
   vehicles.forEach((vehicle, index) => {
     if (!allowedVehicles.has(vehicle.type)) errors.push(`vehicle ${index + 1}: unknown type ${vehicle.type}`);
+    if (level?.id >= 21 && (vehicle.moveX || vehicle.moveY)) errors.push(`vehicle ${index + 1}: moving target vehicle is forbidden after level 20`);
   });
 
   transfers.forEach((transfer, index) => {
@@ -105,6 +107,14 @@ export function validateLevel(level) {
       warnings.push(`obstacle ${index + 1}: impossible deadly obstacle without hint`);
     }
   });
+
+  airCurrents.forEach((current, index) => {
+    if (!['up', 'down'].includes(current.direction)) errors.push(`air current ${index + 1}: invalid direction ${current.direction}`);
+    if (!current.x || !current.y || !current.width || !current.height) errors.push(`air current ${index + 1}: missing bounds`);
+    if ((current.strength || 0) <= 0 || current.strength > 0.12) warnings.push(`air current ${index + 1}: unusual strength ${current.strength}`);
+  });
+
+  if (level?.id >= 21 && airCurrents.length === 0) warnings.push('advanced level has no air-current mechanic');
 
   const lastObstacle = obstacles.filter((obstacle) => obstacle.x < route.finishX).at(-1);
   if (lastObstacle && route.finishX - lastObstacle.x < 300) warnings.push('finish too close to last obstacle');

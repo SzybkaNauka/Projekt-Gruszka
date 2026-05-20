@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createGame } from '../game/createGame.js';
 import { setAudioEnabled } from '../game/audio.js';
 import MobileControls from './MobileControls.jsx';
@@ -11,16 +11,23 @@ export default function GameShell({ initialLevel, paused, soundEnabled, skipToke
 
   eventRef.current = onGameEvent;
 
+  const [startError, setStartError] = useState(null);
   useEffect(() => {
     if (!hostRef.current) {
       return undefined;
     }
-
-    const game = createGame(hostRef.current, (event) => eventRef.current(event), initialLevel, soundEnabled, performanceMode, mobileInputRef, touchControlsEnabled);
-    gameRef.current = game;
+    try {
+      const game = createGame(hostRef.current, (event) => eventRef.current(event), initialLevel, soundEnabled, performanceMode, mobileInputRef, touchControlsEnabled);
+      gameRef.current = game;
+      setStartError(null);
+    } catch (err) {
+      console.error('[GameShell] createGame failed', err);
+      setStartError(err?.message || String(err));
+      gameRef.current = null;
+    }
 
     return () => {
-      gameRef.current?.destroy(true);
+      try { gameRef.current?.destroy(true); } catch (e) {}
       gameRef.current = null;
     };
   }, [initialLevel]);
@@ -47,6 +54,13 @@ export default function GameShell({ initialLevel, paused, soundEnabled, skipToke
   return (
     <>
       <div className="game-host" ref={hostRef} />
+      {startError && (
+        <div className="overlay-panel" style={{ zIndex: 9999 }}>
+          <h2>Błąd uruchomienia gry</h2>
+          <p>{startError}</p>
+          <p>Konsola przeglądarki może zawierać więcej informacji.</p>
+        </div>
+      )}
       <MobileControls mobileInputRef={mobileInputRef} visible={mobileControlsVisible} disabled={mobileControlsDisabled} />
     </>
   );

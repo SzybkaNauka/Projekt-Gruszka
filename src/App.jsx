@@ -14,6 +14,7 @@ import { getSession, onAuthStateChange, signOut } from './services/authService.j
 import { getProfile } from './services/profileService.js';
 import { flushPendingScores, queuePendingScore, submitOnlineScore } from './services/scoreService.js';
 import { isOnline, onOnline, onOffline } from './services/networkService.js';
+import { canUseFullscreen, isFullscreen, toggleFullscreen } from './services/fullscreenService.js';
 
 const GameShell = lazy(() => import('./components/GameShell.jsx'));
 
@@ -86,6 +87,9 @@ export default function App() {
       return false;
     }
   });
+  const [fullscreenActive, setFullscreenActive] = useState(() => isFullscreen());
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(() => canUseFullscreen());
+  const [touchDevice, setTouchDevice] = useState(false);
   const [hud, setHud] = useState({
     level: selectedLevel,
     score: 0,
@@ -156,6 +160,26 @@ export default function App() {
   }, [performanceMode]);
 
   React.useEffect(() => {
+    const updateFullscreenState = () => {
+      setFullscreenActive(isFullscreen());
+      setFullscreenAvailable(canUseFullscreen());
+    };
+    const coarsePointer = window.matchMedia?.('(pointer: coarse)');
+    const updateTouchState = () => setTouchDevice(Boolean(coarsePointer?.matches || navigator.maxTouchPoints > 0));
+
+    updateFullscreenState();
+    updateTouchState();
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenState);
+    coarsePointer?.addEventListener?.('change', updateTouchState);
+    return () => {
+      document.removeEventListener('fullscreenchange', updateFullscreenState);
+      document.removeEventListener('webkitfullscreenchange', updateFullscreenState);
+      coarsePointer?.removeEventListener?.('change', updateTouchState);
+    };
+  }, []);
+
+  React.useEffect(() => {
     try {
       inputSettingsService.setTouchControlsEnabled(!!touchControlsEnabled);
     } catch (e) {}
@@ -193,6 +217,24 @@ export default function App() {
 
   function playUnlocked() {
     startLevel(highestUnlocked);
+  }
+
+  async function toggleGameFullscreen() {
+    if (!fullscreenAvailable) {
+      setOnlineStatus('Pełny ekran jest niedostępny w tej przeglądarce');
+      return;
+    }
+    playSound('ui');
+    try {
+      await toggleFullscreen();
+      const active = isFullscreen();
+      setFullscreenActive(active);
+      if (active && window.screen?.orientation?.lock) {
+        window.screen.orientation.lock('landscape').catch(() => {});
+      }
+    } catch (error) {
+      setOnlineStatus('Pełny ekran nie został włączony');
+    }
   }
 
   function restartLevel() {
@@ -369,7 +411,7 @@ export default function App() {
   }
 
   return (
-    <main className="app">
+    <main className={`app ${fullscreenActive ? 'is-fullscreen' : ''}`}>
       {showSplash && (
         <section className="studio-splash" onClick={() => {
           sessionStorage.setItem('wrs-splash-seen', '1');
@@ -401,8 +443,14 @@ export default function App() {
             <span>Gwiazdki: {totalStars}/{levels.length * 3}</span>
           </div>
 
-          <div className="menu-actions">
+          <div className="menu-actions menu-primary-actions">
             <button className="primary-button big-play" onClick={playUnlocked}>Graj</button>
+            <button className="secondary-button big-play fullscreen-menu-button" onClick={toggleGameFullscreen}>
+              {fullscreenActive ? 'Okno' : 'Pełny ekran'}
+            </button>
+          </div>
+
+          <div className="menu-actions">
             <button className="secondary-button" onClick={() => setScreen('levels')}>Poziomy</button>
             <button className="secondary-button" onClick={() => setScreen('leaderboard')}>Ranking</button>
             <button className="secondary-button" onClick={() => setScreen('friends')}>Znajomi</button>
@@ -565,6 +613,7 @@ export default function App() {
             <button onClick={togglePause}>{paused ? 'Wznów' : 'Pauza'}</button>
             <button onClick={restartLevel}>Restart</button>
             <button onClick={goMenu}>Menu</button>
+            <button onClick={toggleGameFullscreen}>{fullscreenActive ? 'Okno' : 'Pełny'}</button>
             <button onClick={toggleSound}>{save.soundEnabled ? 'Dźwięk' : 'Cisza'}</button>
           </div>
 
@@ -575,7 +624,7 @@ export default function App() {
           {(() => {
             const hasOpenOverlay = screen !== 'game' || showSplash || Boolean(result) || paused;
             const gameActive = screen === 'game' && !showSplash;
-            const mobileControlsVisible = Boolean(touchControlsEnabled) && gameActive;
+            const mobileControlsVisible = Boolean(touchControlsEnabled || touchDevice) && gameActive;
             const mobileControlsDisabled = !gameActive || hasOpenOverlay || Boolean(result) || paused;
             return (
               <Suspense fallback={<div className="game-loading"><span>White Raven Studio</span><strong>Ładowanie trasy...</strong></div>}>

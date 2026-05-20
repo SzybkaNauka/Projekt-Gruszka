@@ -234,6 +234,7 @@ export default function LeaderboardPanel({ session, defaultTab = 'global', defau
                 <span className="stars">{starsLabel(row.stars)}</span>
                 <span className="tags">
                   {row.perfect_run && <em className="tag perfect">PERFECT!</em>}
+                  {row.premium_star_collected && <em className="tag premium-star-tag">★ PREMIUM</em>}
                   {row.created_at && <small>{formatDate(row.created_at)}</small>}
                 </span>
                 <span className="combo">x{row.combo_max || 0}</span>
@@ -257,6 +258,7 @@ export default function LeaderboardPanel({ session, defaultTab = 'global', defau
                   <div>{completed ? `Wynik: ${row.score}` : 'Brak rekordu'}</div>
                   <div>{completed ? `Combo max: x${row.combo_max}` : ''}</div>
                   <div>{completed && row.perfect_run ? 'PERFECT RUN' : ''}</div>
+                  <div>{completed && row.premium_star_collected ? '★ Gwiazda Premium' : ''}</div>
                   <div className="result-card-date">{completed ? formatDate(row.updated_at || row.created_at) : ''}</div>
                 </div>
               </div>

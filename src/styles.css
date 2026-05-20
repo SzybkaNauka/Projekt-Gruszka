@@ -463,6 +463,10 @@ button:disabled {
   letter-spacing: 0;
 }
 
+.level-tile small::first-letter {
+  color: #d19a12;
+}
+
 .level-tile.locked {
   color: #5e665d;
   background: rgba(235, 231, 210, 0.72);
@@ -761,6 +765,7 @@ button:disabled {
 .score-label { font-weight: 900; color: #556b4a; }
 .result-stats-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap:10px; margin-top:6px; }
 .result-stat { background: rgba(255,255,255,0.7); padding:8px 10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-weight:800; }
+.result-premium-star { background: linear-gradient(135deg, #fff4a8, #ffd34a); color: #3b2808; }
 .result-bonuses { margin-top:8px; display:grid; gap:6px; }
 .result-bonus-row { display:flex; justify-content:space-between; padding:8px 10px; background: rgba(250,244,220,0.9); border-radius:8px; font-weight:800; }
 .result-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:8px; }
@@ -1236,6 +1241,11 @@ button:disabled {
 
 .score-row .tag.perfect {
   background: linear-gradient(135deg, #ffe35c, #ffb948);
+}
+
+.score-row .tag.premium-star-tag {
+  background: linear-gradient(135deg, #fff4a8, #ffbf2e);
+  color: #3b2808;
 }
 
 .my-results-grid {

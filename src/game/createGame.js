@@ -36,6 +36,8 @@ import {
   PEAR_LAUNCH_FORCE,
   PEAR_MAX_DAMAGE,
   PEAR_SAFE_LANDING_SPEED,
+  PREMIUM_STAR_COLLECTION_TEXT,
+  PREMIUM_STAR_GLOW,
   PRE_START_COUNTDOWN_MS,
   VEHICLE_ACCELERATION,
   VEHICLE_AIR_CONTROL_LIMIT,
@@ -237,6 +239,7 @@ class PearScene extends Phaser.Scene {
     this.pearDamage = 0;
     this.distanceScoreX = 160;
     this.collectedCoins = 0;
+    this.premiumStarCollected = false;
     this.nearMissCount = 0;
     this.startTime = this.time.now;
     this.lastComboAt = 0;
@@ -370,6 +373,7 @@ class PearScene extends Phaser.Scene {
     });
 
     this.airCurrents = (this.route.airCurrents || []).map((current) => this.createAirCurrent(current));
+    this.createPremiumStar();
 
     this.coins = (this.route.coins || []).map((coin) => {
       const dot = createCoinSprite(this, coin.x, coin.y).setDepth(12);
@@ -436,6 +440,40 @@ class PearScene extends Phaser.Scene {
       }
     }
     return zone;
+  }
+
+  createPremiumStar() {
+    const star = this.level.premiumStar;
+    if (!star) {
+      this.premiumStar = null;
+      return;
+    }
+    const glow = this.add.circle(star.x, star.y, PREMIUM_STAR_GLOW.radius, PREMIUM_STAR_GLOW.outerColor, 0.28).setDepth(17);
+    const body = this.add.star(star.x, star.y, 5, 13, 31, PREMIUM_STAR_GLOW.color, 1).setDepth(18);
+    body.setStrokeStyle(4, 0x6b431f, 0.92);
+    const core = this.add.star(star.x, star.y, 5, 6, 16, 0xfff3a6, 1).setDepth(19);
+    this.premiumStar = this.add.container(0, 0, [glow, body, core]).setDepth(18);
+    this.premiumStar.setSize(PREMIUM_STAR_GLOW.radius * 2, PREMIUM_STAR_GLOW.radius * 2);
+    this.premiumStar.setData('scoreBonus', star.scoreBonus || 2500);
+    this.premiumStar.setData('collected', false);
+    this.premiumStar.setData('x', star.x);
+    this.premiumStar.setData('y', star.y);
+    this.tweens.add({
+      targets: [glow, body, core],
+      scale: 1.12,
+      alpha: PREMIUM_STAR_GLOW.pulseAlpha,
+      duration: 620,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.tweens.add({
+      targets: [body, core],
+      angle: 360,
+      duration: 3600,
+      repeat: -1,
+      ease: 'Linear',
+    });
   }
 
   addReadabilityMarkers() {
@@ -1245,6 +1283,7 @@ class PearScene extends Phaser.Scene {
 
     this.updateCamera();
     this.collectCoins();
+    this.checkPremiumStarCollect();
     this.checkNearMisses();
     this.checkPearVehicleCatch();
     this.checkGaps();
@@ -1289,6 +1328,38 @@ class PearScene extends Phaser.Scene {
         this.addScore(100, coin.x, coin.y, '+100');
       }
     });
+  }
+
+  checkPremiumStarCollect() {
+    if (!this.premiumStar || this.premiumStar.getData('collected')) {
+      return;
+    }
+    const target = this.launched ? this.pear : this.vehicle;
+    const x = this.premiumStar.getData('x');
+    const y = this.premiumStar.getData('y');
+    const currentDistance = Phaser.Math.Distance.Between(target.x, target.y, x, y);
+    const flightDistance = this.launched && this.previousPearPosition
+      ? distanceToSegment({ x, y }, this.previousPearPosition, { x: target.x, y: target.y })
+      : Infinity;
+    if (Math.min(currentDistance, flightDistance) > 54) {
+      return;
+    }
+    const scoreBonus = Number(this.premiumStar.getData('scoreBonus') || 2500);
+    this.premiumStar.setData('collected', true);
+    this.premiumStarCollected = true;
+    this.addScore(scoreBonus, x, y, PREMIUM_STAR_COLLECTION_TEXT[Phaser.Math.Between(0, PREMIUM_STAR_COLLECTION_TEXT.length - 1)]);
+    addSparkBurst(this, x, y, PREMIUM_STAR_GLOW.color, 24);
+    addConfetti(this, x, y);
+    playSound('record');
+    this.tweens.add({
+      targets: this.premiumStar.list,
+      scale: 1.8,
+      alpha: 0,
+      duration: 260,
+      ease: 'Back.easeIn',
+      onComplete: () => this.premiumStar?.destroy(),
+    });
+    this.emitHud();
   }
 
   applyAirCurrents(dt = 1) {
@@ -1500,6 +1571,8 @@ class PearScene extends Phaser.Scene {
         timeMs: totalTime,
         distance,
         perfectRun: this.pearDamage <= 0 && stars === 3,
+        premiumStarCollected: this.premiumStarCollected,
+        premiumStarBonus: this.premiumStarCollected ? Number(this.level.premiumStar?.scoreBonus || 0) : 0,
         isLast: this.levelIndex >= levels.length - 1,
         legendary: this.levelIndex >= levels.length - 1,
       });

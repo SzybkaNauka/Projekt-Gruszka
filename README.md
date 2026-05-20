@@ -11,6 +11,18 @@ Aktywne pojazdy to Drewniana Katapulta, Dyniowy Wozek, Kamienny Taran, Rakietowa
 
 Supabase ranking obsluguje `level_id` od 1 do 50 dla `level_scores` i `best_level_scores`.
 
+## Upgrade kampanii
+
+- Kampania ma 50 Zlotych Gwiazd Premium: po jednej na kazdym poziomie.
+- Gwiazda Premium nie jest platna, nie jest waluta i nie ma zwiazku ze sklepem.
+- To opcjonalny, trudny collectible dla graczy, ktorzy chca powtarzac mapy i robic lepsze runy.
+- Kazda mapa ma 10 dodatkowych sekretow, skrotow, zagwozdek, ryzykownych tras albo mikro-wyzwan.
+- Lacznie kampania zawiera 500 wpisow `extraChallenges`.
+- Zlota Gwiazda Premium daje duzy bonus punktowy zalezny od tieru poziomu.
+- Poziomy maja wiecej sekretow, combo wyzwan, ryzykownych tras, ukladow monet i opcjonalnych decyzji.
+
+W grze: na kazdym poziomie ukryta jest jedna Zlota Gwiazda Premium. Jest bardzo trudna do zdobycia, ale daje duzy bonus.
+
 Vite + React + Phaser + Matter Physics + Capacitor. Gra działa offline jako gość, a funkcje online korzystają z Supabase.
 
 ## Konfiguracja
@@ -81,6 +93,18 @@ http://localhost:5173/?level=37&debug=1
 - W dev console uruchamia sie `runCampaignSanityCheck()` i wypisuje liczbe warnings/errors.
 
 Jesli Supabase ma stara baze z constraintem `level_id` 1-10, odpal ponownie `supabase/schema.sql` albo dodaj migracje zmieniajaca zakres na 1-50 dla `level_scores` i `best_level_scores`.
+
+Premium Star online:
+
+```sql
+alter table level_scores
+add column if not exists premium_star_collected boolean default false;
+
+alter table best_level_scores
+add column if not exists premium_star_collected boolean default false;
+```
+
+Frontend zapisuje Premium Star lokalnie w `premiumStarsByLevel`. Wyniki online wysylaja opcjonalne pole `premium_star_collected`; jesli baza nie ma jeszcze kolumny, zapis wyniku ma fallback bez tego pola.
 
 Gra nadal działa bez konta i bez internetu. Wyniki offline trafiają do kolejki `pendingScores` w localStorage i są wysyłane po odzyskaniu internetu oraz zalogowaniu.
 

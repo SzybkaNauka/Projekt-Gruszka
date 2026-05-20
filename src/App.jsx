@@ -114,6 +114,10 @@ export default function App() {
     () => Object.values(save.starsByLevel).reduce((sum, value) => sum + Number(value || 0), 0),
     [save.starsByLevel],
   );
+  const totalPremiumStars = useMemo(
+    () => Object.values(save.premiumStarsByLevel || {}).filter(Boolean).length,
+    [save.premiumStarsByLevel],
+  );
 
   React.useEffect(() => {
     if (import.meta.env.DEV || devParams.debug) {
@@ -343,13 +347,14 @@ export default function App() {
     }
 
     if (event.type === 'win') {
-      const nextSave = saveLevelResult(event.level, event.totalScore, event.stars);
+      const nextSave = saveLevelResult(event.level, event.totalScore, event.stars, event.premiumStarCollected);
       const scorePayload = {
         level_id: event.level,
         score: event.totalScore,
         stars: event.stars,
         combo_max: event.bestCombo || 1,
         perfect_run: event.stars === 3,
+        premium_star_collected: Boolean(event.premiumStarCollected),
       };
       setSave(nextSave);
       setHud((current) => ({ ...current, score: event.totalScore, best: nextSave.bestScore }));
@@ -466,6 +471,7 @@ export default function App() {
             <span>Rekord: {save.bestScore}</span>
             <span>Odblokowany poziom: {highestUnlocked}</span>
             <span>Gwiazdki: {totalStars}/{levels.length * 3}</span>
+            <span>Złote Gwiazdy: {totalPremiumStars}/{levels.length}</span>
           </div>
 
           <div className="menu-actions menu-primary-actions">
@@ -594,7 +600,7 @@ export default function App() {
                   <strong>{locked ? 'Kłódka' : `Poziom ${level.id}`}</strong>
                   <span>{level.name}</span>
                   <em>{level.difficultyTier}</em>
-                  <small>{locked ? 'Zablokowany' : starsText(save.starsByLevel[level.id])}</small>
+                  <small>{locked ? 'Zablokowany' : `${starsText(save.starsByLevel[level.id])} ${(save.premiumStarsByLevel || {})[level.id] ? '★P' : '☆P'}`}</small>
                 </button>
               );
                   })}
@@ -612,9 +618,10 @@ export default function App() {
             <li>A lub strzałka lewo skręca w lewo.</li>
             <li>D lub strzałka prawo skręca w prawo.</li>
             <li>Spacja wystrzeliwuje gruszkę na następny pojazd.</li>
-            <li>Na telefonie lewa i prawa połowa ekranu skręcają pojazdem.</li>
+            <li>Na telefonie używaj przycisków góra/dół oraz SKOK.</li>
             <li>Przycisk WYSTRZAŁ na HUD odpala gruszkę.</li>
             <li>Zbieraj pestki, jedź blisko przeszkód i utrzymuj combo.</li>
+            <li>Na każdym poziomie ukryta jest jedna Złota Gwiazda Premium. Jest bardzo trudna do zdobycia, ale daje duży bonus.</li>
             <li>Poziom 1 ma jedną wymaganą przesiadkę przez przepaść.</li>
           </ul>
           <div className="menu-actions">
@@ -716,6 +723,7 @@ export default function App() {
                   <div className="result-stat"><strong>Near Missy</strong><span>{result.nearMisses ?? 0}</span></div>
                   <div className="result-stat"><strong>Czas</strong><span>{typeof result.timeMs === 'number' ? `${Math.round(result.timeMs / 1000)}s` : '—'}</span></div>
                   <div className="result-stat"><strong>Perfect</strong><span>{result.perfectRun ? 'TAK' : 'NIE'}</span></div>
+                  <div className="result-stat result-premium-star"><strong>Gwiazda Premium</strong><span>{result.premiumStarCollected ? 'zdobyta' : 'niezdobyta'}</span></div>
                 </div>
 
                 <div className="result-bonuses">
@@ -723,6 +731,7 @@ export default function App() {
                   {result.perfectRun && <div className="result-bonus-row"><strong>Perfect bonus</strong><span>{result.bonusPerfect ?? '—'}</span></div>}
                   {result.maxCombo && <div className="result-bonus-row"><strong>Combo bonus</strong><span>{result.bonusCombo ?? '—'}</span></div>}
                   {result.coins && <div className="result-bonus-row"><strong>Coin bonus</strong><span>{result.bonusCoins ?? '—'}</span></div>}
+                  {result.premiumStarCollected && <div className="result-bonus-row"><strong>Gwiazda Premium</strong><span>+{result.premiumStarBonus ?? 0}</span></div>}
                   {result.tier === 'Impossible' && <div className="result-bonus-row"><strong>Impossible bonus</strong><span>{result.bonusImpossible ?? '—'}</span></div>}
                 </div>
 

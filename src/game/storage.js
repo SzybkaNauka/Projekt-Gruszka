@@ -7,6 +7,7 @@ export const defaultSave = {
   bestScoreByLevel: {},
   unlockedLevel: 1,
   starsByLevel: {},
+  premiumStarsByLevel: {},
   soundEnabled: true,
 };
 
@@ -32,6 +33,13 @@ function sanitizeBestScoreByLevel(value) {
     .filter(([, score]) => score > 0));
 }
 
+function sanitizePremiumStarsByLevel(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value)
+    .map(([level, collected]) => [String(clampLevel(level)), Boolean(collected)])
+    .filter(([, collected]) => collected));
+}
+
 export function migrateStorageIfNeeded() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -44,6 +52,7 @@ export function migrateStorageIfNeeded() {
       ...defaultSave,
       ...parsed,
       starsByLevel: sanitizeStarsByLevel(parsed.starsByLevel),
+      premiumStarsByLevel: sanitizePremiumStarsByLevel(parsed.premiumStarsByLevel),
       bestScoreByLevel: sanitizeBestScoreByLevel(parsed.bestScoreByLevel),
       unlockedLevel: clampLevel(parsed.unlockedLevel),
       bestScore: Math.max(0, Number(parsed.bestScore || 0)),
@@ -73,24 +82,27 @@ export function saveProgress(progress) {
     unlockedLevel: progress.unlockedLevel == null ? current.unlockedLevel : clampLevel(progress.unlockedLevel),
     bestScore: Math.max(0, Number(progress.bestScore ?? current.bestScore ?? 0)),
     starsByLevel: sanitizeStarsByLevel({ ...current.starsByLevel, ...(progress.starsByLevel || {}) }),
+    premiumStarsByLevel: sanitizePremiumStarsByLevel({ ...current.premiumStarsByLevel, ...(progress.premiumStarsByLevel || {}) }),
     bestScoreByLevel: sanitizeBestScoreByLevel({ ...current.bestScoreByLevel, ...(progress.bestScoreByLevel || {}) }),
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(next));
   return next;
 }
 
-export function saveLevelResult(levelId, score, stars) {
+export function saveLevelResult(levelId, score, stars, premiumStarCollected = false) {
   const current = getSave();
   const previousStars = Number(current.starsByLevel[levelId] || 0);
+  const safeLevel = clampLevel(levelId);
   return saveProgress({
     bestScore: Math.max(current.bestScore, score),
     bestScoreByLevel: {
-      [levelId]: Math.max(Number(current.bestScoreByLevel[levelId] || 0), score),
+      [safeLevel]: Math.max(Number(current.bestScoreByLevel[safeLevel] || 0), score),
     },
-    unlockedLevel: Math.min(MAX_LEVEL, Math.max(current.unlockedLevel, levelId + 1)),
+    unlockedLevel: Math.min(MAX_LEVEL, Math.max(current.unlockedLevel, safeLevel + 1)),
     starsByLevel: {
-      [levelId]: Math.max(previousStars, stars),
+      [safeLevel]: Math.max(previousStars, stars),
     },
+    premiumStarsByLevel: premiumStarCollected ? { [safeLevel]: true } : {},
   });
 }
 
@@ -117,6 +129,18 @@ export function getStarsByLevel() {
 
 export function setStarsForLevel(level, stars) {
   return saveProgress({ starsByLevel: { [clampLevel(level)]: clampStars(stars) } });
+}
+
+export function getPremiumStarsByLevel() {
+  return getSave().premiumStarsByLevel;
+}
+
+export function setPremiumStarForLevel(levelId, collected = true) {
+  return saveProgress({ premiumStarsByLevel: { [clampLevel(levelId)]: Boolean(collected) } });
+}
+
+export function hasPremiumStarForLevel(levelId) {
+  return Boolean(getSave().premiumStarsByLevel[clampLevel(levelId)]);
 }
 
 export function getBestScoreByLevel() {

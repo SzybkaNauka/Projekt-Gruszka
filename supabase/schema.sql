@@ -21,6 +21,7 @@ create table if not exists public.level_scores (
   time_ms integer null,
   combo_max integer null,
   perfect_run boolean default false,
+  premium_star_collected boolean default false,
   vehicle_used text null,
   pear_theme text null,
   created_at timestamptz default now()
@@ -39,6 +40,7 @@ create table if not exists public.best_level_scores (
   time_ms integer null,
   combo_max integer null,
   perfect_run boolean default false,
+  premium_star_collected boolean default false,
   vehicle_used text null,
   pear_theme text null,
   updated_at timestamptz default now(),
@@ -67,6 +69,12 @@ create table if not exists public.player_stats (
   total_distance integer default 0,
   updated_at timestamptz default now()
 );
+
+do $$
+begin
+  alter table public.level_scores add column if not exists premium_star_collected boolean default false;
+  alter table public.best_level_scores add column if not exists premium_star_collected boolean default false;
+end $$;
 
 do $$
 begin

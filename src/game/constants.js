@@ -57,6 +57,24 @@ export const NEAR_MISS_DISTANCE = 54;
 export const COMBO_TIMEOUT = 1400;
 export const DEBUG_LEVEL_HELPERS = false;
 export const MAX_LEVEL = 50;
+export const PREMIUM_STAR_SCORE_BY_TIER = {
+  starter: 2500,
+  rookiePlus: 4000,
+  advanced: 6500,
+  veryHard: 9000,
+  impossible: 15000,
+};
+export const PREMIUM_STAR_GLOW = {
+  color: 0xffd34a,
+  outerColor: 0xfff3a6,
+  pulseAlpha: 0.72,
+  radius: 38,
+};
+export const PREMIUM_STAR_COLLECTION_TEXT = [
+  'GWIAZDA PREMIUM!',
+  'ZŁOTY RYZYKANT!',
+  'KOZACKI SEKRET!',
+];
 export const LEVEL_TIER_CONFIG = {
   starter: {
     catchRadiusMultiplier: 1.6,

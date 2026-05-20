@@ -1,3 +1,5 @@
+import { PREMIUM_STAR_SCORE_BY_TIER } from './constants.js';
+
 const legacy = {
   pears: ['normal'],
   blocks: [],
@@ -32,6 +34,94 @@ const themeCycle = [
   { theme: 'vegetableFortress', pear: 'ninja', start: 'pumpkin' },
   { theme: 'bossArena', pear: 'royal', start: 'wooden' },
 ];
+
+const difficultyByWorld = ['easy', 'normal', 'hard', 'veryHard', 'impossible'];
+
+const challengeTypes = [
+  'secret_route',
+  'risk_reward_shortcut',
+  'premium_star_challenge',
+  'near_miss_corridor',
+  'coin_arc_puzzle',
+  'fake_safe_path',
+  'perfect_landing_bonus_zone',
+  'vehicle_mastery_section',
+  'hidden_collectible_chain',
+  'micro_puzzle',
+  'combo_gate',
+  'no_damage_lane',
+  'speed_lane',
+  'trick_jump',
+  'recovery_zone',
+  'visual_gag',
+  'level_identity_gimmick',
+  'moving_obstacle_timing',
+  'boss_warning_pattern',
+  'safe_lane',
+];
+
+const themeChallengeKits = {
+  knightFarm: {
+    label: 'rycerska farma',
+    nouns: ['brama chorągiewek', 'beczki treningowe', 'kukła rycerza', 'płot turniejowy', 'mini zamek'],
+    skills: ['precyzyjny przejazd przez bramę', 'ryzykowne minięcie płotu', 'utrzymanie środka trasy', 'czytanie chorągiewek'],
+    visual: ['chorągiewki prowadzące linię', 'złoty pył za beczkami', 'tarcze treningowe przy sekretach'],
+  },
+  skyDitches: {
+    label: 'skrzydlata dolina',
+    nouns: ['chmurna półka', 'piórkowy łuk', 'wysoki rów', 'dolna bezpieczna nitka', 'wietrzna brama'],
+    skills: ['kontrola wysokości lotu', 'późny skok nad rowem', 'miękkie lądowanie', 'wybór górnej trasy'],
+    visual: ['pióra przy idealnym torze', 'monety w chmurach', 'błękitne znaczniki lądowania'],
+  },
+  superTrack: {
+    label: 'super trasa',
+    nouns: ['szybki pas', 'slalom ostrzegawczy', 'combo brama', 'linia turbo', 'fałszywie łatwy zjazd'],
+    skills: ['jazda bez hamowania', 'timing skoku przy prędkości', 'utrzymanie combo', 'near miss przy przeszkodach'],
+    visual: ['czerwone strzałki szybkości', 'iskry przy skrócie', 'monety w prostej linii turbo'],
+  },
+  pirateBridges: {
+    label: 'pirackie mosty',
+    nouns: ['skrzynia łupu', 'pomost nad wodą', 'beczki korsarzy', 'sekretny skarb', 'ryzykowny trap'],
+    skills: ['skok przez wodę', 'wybór pomostu', 'omijanie beczek', 'lądowanie na wąskiej nitce'],
+    visual: ['monety jak łup', 'deski wskazujące skrót', 'piracka tabliczka przy ryzyku'],
+  },
+  pumpkinHighway: {
+    label: 'dyniowa autostrada',
+    nouns: ['tunel dyniowy', 'pas driftu', 'szeroki slalom', 'płotowy skrót', 'linia bez hamowania'],
+    skills: ['płynny drift góra-dół', 'czytanie szybkiej nitki', 'near miss w slalomie', 'utrzymanie tempa'],
+    visual: ['pomarańczowe swiatła pasa', 'dynie kibicujące przy skrócie', 'monety jako linia driftu'],
+  },
+  quarry: {
+    label: 'kamieniołom',
+    nouns: ['krucha barykada', 'kamienny tunel', 'ściana do ominięcia', 'pyłowa zatoka', 'ścieżka tarana'],
+    skills: ['decyzja taranować czy ominąć', 'stabilna jazda ciężkim pojazdem', 'no-damage przez tunel', 'perfect crash bonus'],
+    visual: ['pył nad kamieniami', 'pęknięte znaki ostrzegawcze', 'szare monety przy sekrecie'],
+  },
+  stuntYard: {
+    label: 'kaskaderskie rampy',
+    nouns: ['mała platforma', 'rampa pokazowa', 'sekwencja stunt', 'awaryjne lądowisko', 'ukryta linia tricku'],
+    skills: ['dobry moment wybicia', 'lądowanie na małej platformie', 'sekwencja skoków', 'ratowanie brzydkiego lądowania'],
+    visual: ['światła rampy', 'gwiazdki kaskaderskie', 'linie monet nad rampą'],
+  },
+  rocketTrack: {
+    label: 'rakietowy tor',
+    nouns: ['ciasna brama', 'rakietowy near miss', 'ostatni moment skoku', 'speed trail', 'bezpieczna boczna nitka'],
+    skills: ['reakcja przy dużej prędkości', 'perfekcyjny skręt', 'skok w ostatniej chwili', 'kontrola rakietowego tempa'],
+    visual: ['czerwone warningi', 'smuga ognia przy bonusie', 'monety jak pas startowy'],
+  },
+  vegetableFortress: {
+    label: 'warzywna forteca',
+    nouns: ['sekretny korytarz', 'mur ninja', 'cicha ścieżka', 'fałszywy skrót', 'brama combo'],
+    skills: ['ciasne przejście bez obrażeń', 'wybór ukrytej trasy', 'near miss między murami', 'cierpliwe czytanie fortecy'],
+    visual: ['ciemne znaczniki sekretu', 'warzywne cienie', 'złoty błysk w murze'],
+  },
+  bossArena: {
+    label: 'arena brokuła',
+    nouns: ['boss pattern', 'złota finałowa trasa', 'taunt brokuła', 'sekret areny', 'legendary finish'],
+    skills: ['czytanie powtarzalnego patternu', 'perfect boss dodge', 'ryzykowny finałowy skok', 'utrzymanie spokoju w arenie'],
+    visual: ['brokułowa tabliczka z drwiną', 'złote monety przy arenie', 'finałowy blask mety'],
+  },
+};
 
 const pearBaseThemes = {
   knight: { name: 'Rycerska Gruszka', colorAccent: 0xb8c4d6, faceStyle: 'brave', trailStyle: 'spark', abilityFlavorText: 'RYCERSKI SKOK!', visualParts: ['helmet', 'shield', 'sword'] },
@@ -74,6 +164,11 @@ function coinArc(startX, startY, count, stepX, lift = 92) {
       y: startY - Math.sin(Math.PI * t) * lift,
     };
   });
+}
+
+function zoneCenter(zone) {
+  if (typeof zone === 'number') return zone;
+  return ((zone?.start || 0) + (zone?.end || 0)) / 2;
 }
 
 function transfer({
@@ -204,6 +299,184 @@ function buildAirCurrents({ world, transferIndex, launchCenter, targetX, road })
   return currents;
 }
 
+function slug(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function challengeDifficulty(world, offset = 0) {
+  return difficultyByWorld[Math.min(difficultyByWorld.length - 1, Math.max(0, world + offset))];
+}
+
+function buildPremiumStar({ id, world, tierName, road, transitions, finishX, theme }) {
+  const transfer = transitions[Math.min(transitions.length - 1, Math.max(0, Math.floor(transitions.length / 2)))];
+  const launchCenter = zoneCenter(transfer?.launchZoneX || 900);
+  const riskyX = Math.round((launchCenter + (transfer?.targetVehicleX || finishX)) / 2 + 80 + world * 24);
+  const highLane = (id + world) % 2 === 0;
+  const y = Math.round(highLane ? road.top + 64 + world * 6 : road.bottom - 72 - world * 4);
+  const requiresByTheme = {
+    knightFarm: 'secret_route',
+    skyDitches: 'risky_jump',
+    superTrack: 'near_miss',
+    pirateBridges: 'secret_route',
+    pumpkinHighway: 'combo_gate',
+    quarry: 'vehicle_swap',
+    stuntYard: 'perfect_landing',
+    rocketTrack: 'risky_jump',
+    vegetableFortress: 'no_damage_lane',
+    bossArena: 'boss_pattern',
+  };
+  return {
+    x: Math.min(finishX - 280, Math.max(620, riskyX)),
+    y,
+    difficulty: challengeDifficulty(world, 1),
+    scoreBonus: PREMIUM_STAR_SCORE_BY_TIER[tierName] || 2500,
+    requires: requiresByTheme[theme] || 'risky_jump',
+    hint: highLane
+      ? 'Wisi wysoko nad bezpieczną linią. Wcześniejszy skok i czysty tor dają szansę.'
+      : 'Leży nisko przy ryzykownej nitce. Trzeba zejść po nią bez utraty kontroli.',
+    visualStyle: 'gold_glow',
+  };
+}
+
+function buildExtraChallenges({ id, world, tierName, theme, road, transitions, premiumStar, finishX }) {
+  const kit = themeChallengeKits[theme] || themeChallengeKits.knightFarm;
+  const transfer = transitions[0] || { launchZoneX: { start: 900, end: 1120 }, targetVehicleX: 1450 };
+  const launchCenter = zoneCenter(transfer.launchZoneX);
+  const baseDifficulty = challengeDifficulty(world);
+  const hardDifficulty = challengeDifficulty(world, 1);
+  const scoreBase = 260 + world * 180 + (id % 10) * 35;
+  const challengeSeeds = [
+    {
+      type: 'coin_arc_puzzle',
+      title: `Łuk ${kit.nouns[0]}`,
+      desc: `Monety układają się w czytelny, ale punktowany tor przez ${kit.label}.`,
+      x: `${Math.round(launchCenter - 160)}-${Math.round(launchCenter + 280)}`,
+      skill: kit.skills[0],
+      visual: kit.visual[0],
+      difficulty: baseDifficulty,
+      reward: { score: scoreBase, combo: true },
+    },
+    {
+      type: 'premium_star_challenge',
+      title: 'Polowanie na Złotą Gwiazdę',
+      desc: `Opcjonalny wariant trasy prowadzi do Złotej Gwiazdy Premium i wymaga świadomego ryzyka.`,
+      x: `x=${premiumStar.x}, y=${premiumStar.y}`,
+      skill: kit.skills[1] || 'precyzyjny skok',
+      visual: 'złoty glow i monety ostrzegawcze',
+      difficulty: premiumStar.difficulty,
+      reward: { score: premiumStar.scoreBonus, premiumStarProgress: true },
+    },
+    {
+      type: 'secret_route',
+      title: `Sekret: ${kit.nouns[1]}`,
+      desc: `Ukryta boczna linia daje więcej punktów, ale wymaga odejścia od najłatwiejszego toru.`,
+      x: `${Math.round(launchCenter + 260)}-${Math.round(launchCenter + 620)}`,
+      skill: kit.skills[2] || 'wybór alternatywnej trasy',
+      visual: kit.visual[1],
+      difficulty: baseDifficulty,
+      reward: { score: scoreBase + 240, combo: true },
+    },
+    {
+      type: 'risk_reward_shortcut',
+      title: `Skrót przez ${kit.nouns[2]}`,
+      desc: `Krótsza linia pozwala oszczędzić czas, ale mocno podnosi ryzyko utraty combo.`,
+      x: `${Math.round(launchCenter + 520)}-${Math.round(launchCenter + 880)}`,
+      skill: kit.skills[3] || 'szybka decyzja',
+      visual: kit.visual[2],
+      difficulty: hardDifficulty,
+      reward: { score: scoreBase + 360, combo: true },
+    },
+    {
+      type: world >= 2 ? 'air_current_read' : 'near_miss_corridor',
+      title: world >= 2 ? 'Czytanie prądu powietrza' : `Korytarz przy ${kit.nouns[3]}`,
+      desc: world >= 2
+        ? 'Sekcja uczy wykorzystania stałego prądu powietrza zamiast walki z nim.'
+        : 'Wąska linia przy przeszkodach nagradza bliskie minięcia i spokojną rękę.',
+      x: `${Math.round(launchCenter + 720)}-${Math.round(launchCenter + 1080)}`,
+      skill: world >= 2 ? 'kontrola wysokości w locie' : 'near miss bez paniki',
+      visual: world >= 2 ? 'półprzezroczyste strefy wiatru' : 'żółte znaczniki ryzyka',
+      difficulty: hardDifficulty,
+      reward: { score: scoreBase + 420, combo: true },
+    },
+    {
+      type: 'perfect_landing_bonus_zone',
+      title: 'Małe idealne lądowanie',
+      desc: `Niewielka strefa po przesiadce nagradza czyste lądowanie dodatkowym bonusem.`,
+      x: `${Math.round((transfer.targetVehicleX || launchCenter + 430) - 80)}-${Math.round((transfer.targetVehicleX || launchCenter + 430) + 120)}`,
+      skill: 'perfect landing',
+      visual: 'mały złoty znacznik przy pojeździe',
+      difficulty: baseDifficulty,
+      reward: { score: scoreBase + 520, combo: true },
+    },
+    {
+      type: 'vehicle_mastery_section',
+      title: `Mistrzostwo: ${kit.nouns[4]}`,
+      desc: `Ten fragment premiuje styl jazdy pojazdu poziomu: stabilność, drift, taran albo prędkość.`,
+      x: `${Math.round(launchCenter + 980)}-${Math.round(launchCenter + 1400)}`,
+      skill: 'opanowanie pojazdu',
+      visual: 'tematyczne znaki przy trasie',
+      difficulty: baseDifficulty,
+      reward: { score: scoreBase + 560, combo: true },
+    },
+    {
+      type: 'hidden_collectible_chain',
+      title: 'Łańcuch pestek sekretu',
+      desc: `Seria trudniej ustawionych monet prowadzi do małego bonusu i lepszego wejścia w końcówkę.`,
+      x: `${Math.round(finishX - 1050)}-${Math.round(finishX - 620)}`,
+      skill: 'utrzymanie linii monet',
+      visual: 'monety schowane poza główną nitką',
+      difficulty: hardDifficulty,
+      reward: { score: scoreBase + 680, combo: true },
+    },
+    {
+      type: id % 10 === 0 ? 'boss_warning_pattern' : 'micro_puzzle',
+      title: id % 10 === 0 ? 'Czytelny pattern bossa' : 'Góra czy dół?',
+      desc: id % 10 === 0
+        ? 'Boss ma powtarzalny wzór ostrzeżeń, który da się opanować przy powtórkach.'
+        : 'Krótka decyzja rozdziela trasę na bezpieczną linię i punktowany wariant ryzyka.',
+      x: `${Math.round(finishX - 760)}-${Math.round(finishX - 360)}`,
+      skill: id % 10 === 0 ? 'zapamiętanie patternu' : 'szybki wybór trasy',
+      visual: id % 10 === 0 ? 'brokułowe ostrzeżenia' : 'dwie gałęzie monet',
+      difficulty: hardDifficulty,
+      reward: { score: scoreBase + 760, combo: id % 10 !== 0 },
+    },
+    {
+      type: id % 5 === 0 ? 'speed_lane' : 'visual_gag',
+      title: id % 5 === 0 ? 'Linia bez hamowania' : `Smaczek: ${kit.label}`,
+      desc: id % 5 === 0
+        ? 'Najbardziej punktowana końcówka wymaga wejścia w metę z pełnym tempem.'
+        : `Mały wizualny sekret buduje charakter mapy i wskazuje opcjonalne ryzyko.`,
+      x: `${Math.round(finishX - 420)}-${Math.round(finishX - 120)}`,
+      skill: id % 5 === 0 ? 'utrzymanie prędkości' : 'uważna obserwacja mapy',
+      visual: id % 5 === 0 ? 'szybkie znaczniki mety' : kit.visual[id % kit.visual.length],
+      difficulty: baseDifficulty,
+      reward: { score: scoreBase + 300, combo: id % 5 === 0 },
+    },
+  ];
+
+  return challengeSeeds.map((challenge, index) => ({
+    id: `l${id}_${slug(challenge.type)}_${index + 1}`,
+    type: challenge.type,
+    name: challenge.title,
+    description: challenge.desc,
+    difficulty: challenge.difficulty,
+    reward: {
+      score: challenge.reward.score,
+      combo: Boolean(challenge.reward.combo),
+      premiumStarProgress: Boolean(challenge.reward.premiumStarProgress),
+    },
+    placementHint: challenge.x,
+    requiredSkill: challenge.skill,
+    visualHint: challenge.visual,
+    mandatory: false,
+  }));
+}
+
 function buildLevel(id) {
   const world = Math.floor((id - 1) / 10);
   const tierName = tierByWorld[world];
@@ -263,6 +536,8 @@ function buildLevel(id) {
   }
   const obstacles = buildObstacles({ id, theme: themeConfig.theme, tierName, routeLength: length, road, transfers: transitions });
   const finishX = length - 240;
+  const premiumStar = buildPremiumStar({ id, world, tierName, road, transitions, finishX, theme: themeConfig.theme });
+  const extraChallenges = buildExtraChallenges({ id, world, tierName, theme: themeConfig.theme, road, transitions, premiumStar, finishX });
   const finishBonus = tier.bonus + id * 230;
   const cameraLookahead = tier.camera + (themeCameraBoost[themeConfig.theme] || 0);
   const oneStar = finishBonus;
@@ -310,6 +585,8 @@ function buildLevel(id) {
         { at: 5200 + world * 320, lane: road.bottom - 105, type: 'broccoliBarricade' },
       ] : undefined,
     },
+    premiumStar,
+    extraChallenges,
     ...legacy,
   };
 }

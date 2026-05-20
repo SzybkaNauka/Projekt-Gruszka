@@ -14,6 +14,7 @@ const allowedObstacles = new Set([
   'broccoliBarricade',
   'stoneWall',
 ]);
+const allowedDifficulties = new Set(['easy', 'normal', 'hard', 'veryHard', 'impossible']);
 
 const tierMinimums = {
   starter: { catchRadius: 160, failGrace: 700, maxTransferDistance: 900, maxObstacles: 7 },
@@ -49,6 +50,8 @@ export function validateLevel(level) {
   const obstacles = route.obstacles || [];
   const collectibles = route.collectibles || route.coins || [];
   const airCurrents = route.airCurrents || [];
+  const premiumStar = level?.premiumStar;
+  const extraChallenges = level?.extraChallenges || [];
   const thresholds = level?.starThresholds;
 
   if (!level?.id) errors.push('missing id');
@@ -71,6 +74,22 @@ export function validateLevel(level) {
   if (!Array.isArray(collectibles)) errors.push('collectibles/coins is not an array');
   if (obstacles.length > minimums.maxObstacles) warnings.push(`high obstacle density: ${obstacles.length}`);
   if (tier === 'starter' && obstacles.length > 7) warnings.push('starter level has too many obstacles');
+  if (!premiumStar) errors.push('missing premiumStar');
+  if (premiumStar) {
+    if (!Number.isFinite(Number(premiumStar.x)) || !Number.isFinite(Number(premiumStar.y))) errors.push('premiumStar missing x/y');
+    if (Number(premiumStar.scoreBonus || 0) <= 0) errors.push('premiumStar missing positive scoreBonus');
+    if (!allowedDifficulties.has(premiumStar.difficulty)) errors.push(`premiumStar invalid difficulty: ${premiumStar.difficulty}`);
+  }
+  if (!Array.isArray(extraChallenges)) errors.push('extraChallenges is not an array');
+  if (Array.isArray(extraChallenges) && extraChallenges.length < 10) errors.push(`extraChallenges has ${extraChallenges.length}, expected at least 10`);
+  extraChallenges.forEach((challenge, index) => {
+    const label = `extraChallenge ${index + 1}`;
+    if (!challenge.id) errors.push(`${label}: missing id`);
+    if (!challenge.type) errors.push(`${label}: missing type`);
+    if (!challenge.name) errors.push(`${label}: missing name`);
+    if (!challenge.description) errors.push(`${label}: missing description`);
+    if (!allowedDifficulties.has(challenge.difficulty)) errors.push(`${label}: invalid difficulty ${challenge.difficulty}`);
+  });
 
   vehicles.forEach((vehicle, index) => {
     if (!allowedVehicles.has(vehicle.type)) errors.push(`vehicle ${index + 1}: unknown type ${vehicle.type}`);
@@ -127,12 +146,18 @@ export function runCampaignSanityCheck(levelList = levels) {
   const errors = results.flatMap((result) => result.errors.map((message) => ({ level: result.levelId, message })));
   const warnings = results.flatMap((result) => result.warnings.map((message) => ({ level: result.levelId, message })));
   const springsFound = results.filter((result) => result.errors.some((message) => message.includes('spring'))).length;
+  const premiumStars = levelList.filter((level) => level?.premiumStar).length;
+  const extraChallenges = levelList.reduce((sum, level) => sum + (Array.isArray(level?.extraChallenges) ? level.extraChallenges.length : 0), 0);
   const unknownVehicles = errors.filter((item) => item.message.includes('vehicle')).length;
   const missingStarThresholds = errors.filter((item) => item.message.includes('starThresholds')).length;
   const summary = {
     totalLevels: levelList.length,
     errors: errors.length,
     warnings: warnings.length,
+    premiumStars,
+    expectedPremiumStars: levelList.length,
+    extraChallenges,
+    expectedExtraChallenges: levelList.length * 10,
     springsFound,
     unknownVehicles,
     missingStarThresholds,
@@ -140,7 +165,7 @@ export function runCampaignSanityCheck(levelList = levels) {
   };
 
   if (typeof console !== 'undefined') {
-    const line = `Campaign sanity: ${summary.totalLevels} levels checked, ${summary.warnings} warnings, ${summary.errors} errors.`;
+    const line = `Campaign sanity: ${summary.totalLevels} levels checked, premiumStars ${summary.premiumStars}/${summary.expectedPremiumStars}, extraChallenges ${summary.extraChallenges}/${summary.expectedExtraChallenges}, springs found ${summary.springsFound}, ${summary.warnings} warnings, ${summary.errors} errors.`;
     if (summary.errors > 0) console.error(line, summary.details);
     else if (summary.warnings > 0) console.warn(line, summary.details);
     else console.info(line, summary);

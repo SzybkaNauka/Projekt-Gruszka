@@ -14,6 +14,7 @@ export function normalizeScoreResult(result) {
     time_ms: result.time_ms == null ? null : Number(result.time_ms),
     combo_max: result.combo_max == null ? Number(result.bestCombo || 0) : Number(result.combo_max),
     perfect_run: Boolean(result.perfect_run || result.stars === 3),
+    premium_star_collected: Boolean(result.premium_star_collected || result.premiumStarCollected),
     vehicle_used: result.vehicle_used || result.vehicle || null,
     pear_theme: result.pear_theme || result.pearTheme || null,
   };
@@ -29,6 +30,16 @@ export function validateScore(result) {
 }
 
 export const validateScoreResult = validateScore;
+
+function isMissingPremiumStarColumn(error) {
+  const message = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
+  return message.includes('premium_star_collected') && (message.includes('column') || message.includes('schema cache'));
+}
+
+function withoutPremiumStarColumn(payload) {
+  const { premium_star_collected, ...rest } = payload;
+  return rest;
+}
 
 export function saveLocalScore(result) {
   const score = normalizeScoreResult(result);
@@ -63,7 +74,14 @@ export async function submitOnlineScore(result, userId) {
   const client = requireSupabase();
   const payload = { ...validation.score, user_id: userId };
   const { error } = await client.from('level_scores').insert(payload);
-  if (error) throw error;
+  if (error) {
+    if (isMissingPremiumStarColumn(error)) {
+      const retry = await client.from('level_scores').insert(withoutPremiumStarColumn(payload));
+      if (retry.error) throw retry.error;
+    } else {
+      throw error;
+    }
+  }
   await submitBestScore(validation.score, userId);
   return { submitted: true };
 }
@@ -81,8 +99,16 @@ export async function submitBestScore(result, userId) {
     .maybeSingle();
   if (readError) throw readError;
   if (current && current.score >= score.score) return { updated: false };
-  const { error } = await client.from('best_level_scores').upsert({ ...score, user_id: userId, updated_at: new Date().toISOString() });
-  if (error) throw error;
+  const payload = { ...score, user_id: userId, updated_at: new Date().toISOString() };
+  const { error } = await client.from('best_level_scores').upsert(payload);
+  if (error) {
+    if (isMissingPremiumStarColumn(error)) {
+      const retry = await client.from('best_level_scores').upsert(withoutPremiumStarColumn(payload));
+      if (retry.error) throw retry.error;
+    } else {
+      throw error;
+    }
+  }
   await updateOnlineStats(score, userId);
   return { updated: true };
 }
@@ -224,6 +250,7 @@ export async function getUserBestScores(userId, levelId = 'all', worldRange = 'a
       stars: 0,
       combo_max: 0,
       perfect_run: false,
+      premium_star_collected: false,
       created_at: null,
       updated_at: null,
     };

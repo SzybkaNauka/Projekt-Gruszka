@@ -130,10 +130,12 @@ export function validateLevel(level) {
   airCurrents.forEach((current, index) => {
     if (!['up', 'down'].includes(current.direction)) errors.push(`air current ${index + 1}: invalid direction ${current.direction}`);
     if (!current.x || !current.y || !current.width || !current.height) errors.push(`air current ${index + 1}: missing bounds`);
-    if ((current.strength || 0) <= 0 || current.strength > 0.12) warnings.push(`air current ${index + 1}: unusual strength ${current.strength}`);
+    if ((current.strength || 0) <= 0.19 || current.strength > 0.65) warnings.push(`air current ${index + 1}: unusual strength ${current.strength}`);
+    if (current.height < 200) warnings.push(`air current ${index + 1}: too narrow vertically`);
   });
 
   if (level?.id >= 21 && airCurrents.length === 0) warnings.push('advanced level has no air-current mechanic');
+  if (level?.id >= 21 && !airCurrents.some((current) => current.direction === 'up')) warnings.push('advanced level has no upward air current');
 
   const lastObstacle = obstacles.filter((obstacle) => obstacle.x < route.finishX).at(-1);
   if (lastObstacle && route.finishX - lastObstacle.x < 300) warnings.push('finish too close to last obstacle');

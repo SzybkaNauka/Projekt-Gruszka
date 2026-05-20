@@ -272,14 +272,15 @@ function buildAirCurrents({ world, transferIndex, launchCenter, targetX, road })
   const direction = (transferIndex + world) % 2 === 0 ? 'up' : 'down';
   const opposite = direction === 'up' ? 'down' : 'up';
   const midX = launchCenter + (targetX - launchCenter) * 0.52;
-  const y = direction === 'up' ? road.bottom - 138 : road.top + 138;
-  const strength = 0.048 + world * 0.011;
+  const roadCenter = (road.top + road.bottom) / 2;
+  const y = roadCenter + (direction === 'up' ? 42 : -42);
+  const strength = 0.32 + world * 0.035;
   const currents = [{
     id: `air-${world}-${transferIndex}-main`,
     x: midX,
     y,
-    width: 280 + world * 24,
-    height: 142,
+    width: 360 + world * 34,
+    height: 252,
     direction,
     strength,
   }];
@@ -288,11 +289,11 @@ function buildAirCurrents({ world, transferIndex, launchCenter, targetX, road })
     currents.push({
       id: `air-${world}-${transferIndex}-counter`,
       x: midX + 250 + transferIndex * 18,
-      y: opposite === 'up' ? road.bottom - 148 : road.top + 148,
-      width: 210 + world * 16,
-      height: 118,
+      y: roadCenter + (opposite === 'up' ? 34 : -34),
+      width: 260 + world * 22,
+      height: 220,
       direction: opposite,
-      strength: strength * 0.72,
+      strength: strength * 0.76,
     });
   }
 

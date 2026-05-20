@@ -1273,8 +1273,8 @@ class PearScene extends Phaser.Scene {
       this.pear.setScale(1 + Math.sin(this.time.now * 0.012) * 0.025, 1 - Math.sin(this.time.now * 0.012) * 0.018);
       this.animateVehicleJuice(steer);
     } else {
-      this.applyAirCurrents(dt);
       this.pear.setVelocity(this.pear.body.velocity.x, this.pear.body.velocity.y + PEAR_FLIGHT_GRAVITY * dt);
+      this.applyAirCurrents(dt);
       this.addPearTrail();
       if (this.pear.y < 95 && Math.floor(this.time.now / 420) % 2 === 0) {
         this.addScore(20, this.pear.x, this.pear.y, 'MEGA LOT!');
@@ -1367,6 +1367,7 @@ class PearScene extends Phaser.Scene {
       return;
     }
     this.airCurrents.forEach((current) => {
+      current.setAlpha(0.16);
       const bounds = current.getData('bounds');
       if (!bounds) return;
       if (this.pear.x < bounds.left || this.pear.x > bounds.right || this.pear.y < bounds.top || this.pear.y > bounds.bottom) {
@@ -1375,6 +1376,7 @@ class PearScene extends Phaser.Scene {
       const direction = current.getData('direction');
       const strength = current.getData('strength') || 0.05;
       const push = (direction === 'up' ? -strength : strength) * dt;
+      current.setAlpha(0.24);
       this.pear.setVelocity(
         this.pear.body.velocity.x,
         Phaser.Math.Clamp(this.pear.body.velocity.y + push, -10.8, 10.8),

@@ -13,12 +13,12 @@ export default function GameShell({ initialLevel, paused, soundEnabled, skipToke
 
   const [startError, setStartError] = useState(null);
   useEffect(() => {
-    if (!hostRef.current) {
-      return undefined;
-    }
+    if (!hostRef.current) return undefined;
+    console.log('[GameShell] create attempt', { initialLevel, touchControlsEnabled, hasContainer: !!hostRef.current });
     try {
       const game = createGame(hostRef.current, (event) => eventRef.current(event), initialLevel, soundEnabled, performanceMode, mobileInputRef, touchControlsEnabled);
       gameRef.current = game;
+      console.log('[GameShell] createGame returned', { gameCreated: !!game });
       setStartError(null);
     } catch (err) {
       console.error('[GameShell] createGame failed', err);
@@ -53,7 +53,9 @@ export default function GameShell({ initialLevel, paused, soundEnabled, skipToke
 
   return (
     <>
-      <div className="game-host" ref={hostRef} />
+      <div className="game-shell">
+        <div className="game-host" ref={hostRef} />
+      </div>
       {startError && (
         <div className="overlay-panel" style={{ zIndex: 9999 }}>
           <h2>Błąd uruchomienia gry</h2>

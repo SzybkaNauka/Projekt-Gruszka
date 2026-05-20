@@ -602,6 +602,23 @@ button:disabled {
   touch-action: none;
 }
 
+/* Safety: ensure game container gets a usable viewport height so Phaser can size its canvas */
+.game-shell {
+  position: relative;
+  width: 100%;
+  height: calc(100dvh - 64px);
+  min-height: 360px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.game-host canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1;
+}
+
 .game-loading {
   min-height: 100%;
   display: grid;
@@ -846,6 +863,21 @@ button:disabled {
 .mobile-controls.disabled { opacity: 0.48; pointer-events: none; }
 .mobile-control-button.active { transform: scale(0.92); box-shadow: 0 4px 0 rgba(0,0,0,0.16); }
 .mobile-jump-button.active { transform: scale(0.96); box-shadow: 0 6px 0 rgba(0,0,0,0.18); }
+.mobile-controls {
+  position: absolute;
+  inset: auto 0 0 0;
+  pointer-events: none; /* allow clicks through except on buttons */
+  background: transparent;
+}
+
+.mobile-controls * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-controls .mobile-control-button,
+.mobile-controls .mobile-jump-button {
+  pointer-events: auto; /* buttons still accept input */
+}
 .mobile-controls { transition: opacity 160ms ease; }
 .mobile-controls .mobile-actions {
   position: absolute;

@@ -196,7 +196,9 @@ class PearScene extends Phaser.Scene {
   }
 
   create() {
-    setAudioEnabled(this.soundEnabled);
+    console.log('[PearScene] create start', { levelIndex: this.levelIndex, showTouchHints: !!this.showTouchHints });
+    try {
+      setAudioEnabled(this.soundEnabled);
     this.level = levels[this.levelIndex];
     this.route = this.level.route || prototypeRoute;
     this.validateLevelDesign();
@@ -271,8 +273,20 @@ class PearScene extends Phaser.Scene {
     if (!this.performanceMode) {
       floatingText(this, 310, 320, this.level.pearTheme?.abilityFlavorText || 'NIE HAMUJ!', '#ffffff', 30);
     }
-  }
+    if (import.meta.env.DEV) {
+      try {
+        this.add.text(200, 200, 'PHASER OK', { fontFamily: 'Arial', fontSize: '22px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.4)' }).setDepth(9999);
+      } catch (e) {
+        console.warn('[PearScene] dev text failed', e);
+      }
+    }
+    console.log('[PearScene] create complete', { levelId: this.level?.id, routeLength: this.route?.length });
+  } catch (err) {
+      console.error('[PearScene] create error', err);
+      throw err;
+    }
 
+  }
   setPaused(paused) {
     this.isPausedByUi = paused;
     if (paused) {

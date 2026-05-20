@@ -47,6 +47,24 @@ button:disabled {
     radial-gradient(circle at 82% 12%, rgba(255, 234, 135, 0.62), transparent 25%);
 }
 
+.app.is-mobile-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: #89cef7;
+}
+
+.app.is-mobile-fullscreen .menu-screen {
+  min-height: 100dvh;
+}
+
+.app.is-mobile-fullscreen .game-screen {
+  height: 100dvh;
+}
+
 .menu-screen,
 .panel-screen {
   min-height: 100%;
@@ -855,6 +873,11 @@ button:disabled {
   gap: 8px;
   pointer-events: auto;
 }
+
+.mobile-controls .mobile-dpad.vertical-only {
+  width: 72px;
+  grid-template-rows: repeat(2, auto);
+}
 .mobile-controls .mobile-dpad-row {
   display: flex;
   gap: 8px;
@@ -1532,6 +1555,10 @@ button:disabled {
     gap: 6px;
   }
 
+  .mobile-controls .mobile-dpad.vertical-only {
+    width: 62px;
+  }
+
   .mobile-controls .mobile-dpad-row {
     gap: 6px;
   }
@@ -1566,6 +1593,10 @@ button:disabled {
   .mobile-controls .mobile-dpad {
     width: 110px;
     bottom: 4px;
+  }
+
+  .mobile-controls .mobile-dpad.vertical-only {
+    width: 56px;
   }
 
   .mobile-control-button {

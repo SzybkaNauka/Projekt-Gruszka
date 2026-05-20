@@ -1,6 +1,7 @@
-export function canUseFullscreen() {
+export function canUseFullscreen(target = null) {
   if (typeof document === 'undefined') return false;
-  return !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen || document.documentElement.msRequestFullscreen);
+  const element = target || document.documentElement;
+  return !!(element?.requestFullscreen || element?.webkitRequestFullscreen || element?.msRequestFullscreen);
 }
 
 export function isFullscreen() {
@@ -8,15 +9,11 @@ export function isFullscreen() {
   return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
 }
 
-export async function enterFullscreen() {
-  if (!canUseFullscreen()) throw new Error('Pełny ekran niedostępny');
-  try {
-    if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
-    else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
-    else if (document.documentElement.msRequestFullscreen) document.documentElement.msRequestFullscreen();
-  } catch (e) {
-    throw e;
-  }
+export async function enterFullscreen(target = document.documentElement) {
+  if (!canUseFullscreen(target)) throw new Error('Pełny ekran niedostępny');
+  if (target.requestFullscreen) await target.requestFullscreen({ navigationUI: 'hide' });
+  else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+  else if (target.msRequestFullscreen) target.msRequestFullscreen();
 }
 
 export async function exitFullscreen() {
@@ -29,15 +26,15 @@ export async function exitFullscreen() {
   }
 }
 
-export async function toggleFullscreen() {
+export async function toggleFullscreen(target = document.documentElement) {
   if (isFullscreen()) return exitFullscreen();
-  return enterFullscreen();
+  return enterFullscreen(target);
 }
 
 export function isStandalonePWA() {
   if (typeof window === 'undefined') return false;
   try {
-    return window.matchMedia && window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
   } catch {
     return false;
   }

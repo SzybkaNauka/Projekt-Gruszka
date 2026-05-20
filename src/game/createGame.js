@@ -104,6 +104,8 @@ const tierCatchMinimums = {
   veryHard: 96,
   impossible: 84,
 };
+const REPLAY_COUNTDOWN_MS = 2000;
+const COUNTDOWN_SEEN_KEY = 'gruszka-katapulta-countdown-seen-v1';
 
 function levelTier(levelNumber) {
   if (levelNumber <= 3) return 'easy';
@@ -159,6 +161,15 @@ function runtimeDebugEnabled() {
   if (DEBUG_LEVEL_HELPERS) return true;
   if (typeof window === 'undefined') return false;
   return new URLSearchParams(window.location.search).get('debug') === '1';
+}
+
+function getPreStartCountdownMs() {
+  if (typeof sessionStorage === 'undefined') {
+    return PRE_START_COUNTDOWN_MS;
+  }
+  const seen = sessionStorage.getItem(COUNTDOWN_SEEN_KEY) === '1';
+  sessionStorage.setItem(COUNTDOWN_SEEN_KEY, '1');
+  return seen ? REPLAY_COUNTDOWN_MS : PRE_START_COUNTDOWN_MS;
 }
 
 function hasForbiddenSpring(value) {
@@ -263,13 +274,13 @@ class PearScene extends Phaser.Scene {
     this.emitHud();
     // Pre-start countdown before gameplay begins
     this.isPreStartCountdown = true;
-    this.countdownRemainingMs = PRE_START_COUNTDOWN_MS;
+    this.countdownRemainingMs = getPreStartCountdownMs();
     this.countdownOverlay = this.add.container(0, 0).setDepth(200).setScrollFactor(0);
     this.countdownBg = this.add.rectangle(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 0x000000, 0.28).setScrollFactor(0).setDepth(201);
     this.countdownTitle = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - 80, 'PRZYGOTUJ SIĘ!', {
       fontFamily: 'Arial, sans-serif', fontSize: '28px', fontStyle: '900', color: '#fff9d8', stroke: '#2b2b1d', strokeThickness: 6,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
-    this.countdownNumber = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 6, '5', {
+    this.countdownNumber = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 6, String(Math.ceil(this.countdownRemainingMs / 1000)), {
       fontFamily: 'Arial, sans-serif', fontSize: '86px', fontStyle: '900', color: '#ffd34a', stroke: '#582e05', strokeThickness: 10,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
     this.countdownLevelInfo = this.add.text(this.cameras.main.scrollX + WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 86, `Level ${this.level.id} — ${this.level.name}` , {

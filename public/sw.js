@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gruszka-katapulta-v2';
+const CACHE_NAME = 'gruszka-katapulta-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {

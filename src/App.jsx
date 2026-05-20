@@ -89,6 +89,7 @@ export default function App() {
   });
   const [fullscreenActive, setFullscreenActive] = useState(() => isFullscreen());
   const [fullscreenAvailable, setFullscreenAvailable] = useState(() => canUseFullscreen());
+  const [mobileFullscreenActive, setMobileFullscreenActive] = useState(false);
   const [touchDevice, setTouchDevice] = useState(false);
   const [hud, setHud] = useState({
     level: selectedLevel,
@@ -163,6 +164,7 @@ export default function App() {
     const updateFullscreenState = () => {
       setFullscreenActive(isFullscreen());
       setFullscreenAvailable(canUseFullscreen());
+      if (!isFullscreen()) setMobileFullscreenActive(false);
     };
     const coarsePointer = window.matchMedia?.('(pointer: coarse)');
     const updateTouchState = () => setTouchDevice(Boolean(coarsePointer?.matches || navigator.maxTouchPoints > 0));
@@ -220,20 +222,43 @@ export default function App() {
   }
 
   async function toggleGameFullscreen() {
-    if (!fullscreenAvailable) {
-      setOnlineStatus('Powiększenie na cały ekran jest niedostępne w tej przeglądarce');
+    const target = document.querySelector('.game-screen') || document.getElementById('root') || document.documentElement;
+    const canFullscreenTarget = canUseFullscreen(target);
+    const shouldExit = fullscreenActive || mobileFullscreenActive;
+
+    if (shouldExit) {
+      playSound('ui');
+      try {
+        if (fullscreenActive) await toggleFullscreen(target);
+      } finally {
+        setMobileFullscreenActive(false);
+        setFullscreenActive(isFullscreen());
+      }
       return;
     }
+
     playSound('ui');
+    setMobileFullscreenActive(Boolean(touchDevice));
     try {
-      await toggleFullscreen();
+      if (!canFullscreenTarget) {
+        if (!touchDevice) {
+          setOnlineStatus('Powiększenie na cały ekran jest niedostępne w tej przeglądarce');
+          setMobileFullscreenActive(false);
+        }
+        return;
+      }
+      await toggleFullscreen(target);
       const active = isFullscreen();
       setFullscreenActive(active);
+      setMobileFullscreenActive(Boolean(touchDevice) && !active);
       if (active && window.screen?.orientation?.lock) {
         window.screen.orientation.lock('landscape').catch(() => {});
       }
     } catch (error) {
-      setOnlineStatus('Powiększenie na cały ekran nie zostało włączone');
+      if (!touchDevice) {
+        setOnlineStatus('Powiększenie na cały ekran nie zostało włączone');
+        setMobileFullscreenActive(false);
+      }
     }
   }
 
@@ -411,7 +436,7 @@ export default function App() {
   }
 
   return (
-    <main className={`app ${fullscreenActive ? 'is-fullscreen' : ''}`}>
+    <main className={`app ${fullscreenActive ? 'is-fullscreen' : ''} ${mobileFullscreenActive ? 'is-mobile-fullscreen' : ''}`}>
       {showSplash && (
         <section className="studio-splash" onClick={() => {
           sessionStorage.setItem('wrs-splash-seen', '1');
@@ -446,7 +471,7 @@ export default function App() {
           <div className="menu-actions menu-primary-actions">
             <button className="primary-button big-play" onClick={playUnlocked}>Graj</button>
             <button className="secondary-button big-play fullscreen-menu-button" onClick={toggleGameFullscreen}>
-              {fullscreenActive ? 'Wyjdź z pełnego ekranu' : 'Powiększ na cały ekran'}
+              {fullscreenActive || mobileFullscreenActive ? 'Wyjdź z pełnego ekranu' : 'Powiększ na cały ekran'}
             </button>
           </div>
 
@@ -613,7 +638,7 @@ export default function App() {
             <button onClick={togglePause}>{paused ? 'Wznów' : 'Pauza'}</button>
             <button onClick={restartLevel}>Restart</button>
             <button onClick={goMenu}>Menu</button>
-            <button onClick={toggleGameFullscreen}>{fullscreenActive ? 'Okno' : 'Cały ekran'}</button>
+            <button onClick={toggleGameFullscreen}>{fullscreenActive || mobileFullscreenActive ? 'Okno' : 'Cały ekran'}</button>
             <button onClick={toggleSound}>{save.soundEnabled ? 'Dźwięk' : 'Cisza'}</button>
           </div>
 

@@ -144,6 +144,17 @@ function inZone(x, zone) {
   return x >= zone.start && x <= zone.end;
 }
 
+function distanceToSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 0) {
+    return Phaser.Math.Distance.Between(point.x, point.y, start.x, start.y);
+  }
+  const t = Phaser.Math.Clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1);
+  return Phaser.Math.Distance.Between(point.x, point.y, start.x + dx * t, start.y + dy * t);
+}
+
 function runtimeDebugEnabled() {
   if (DEBUG_LEVEL_HELPERS) return true;
   if (typeof window === 'undefined') return false;
@@ -223,6 +234,9 @@ class PearScene extends Phaser.Scene {
     this.nearMissMemory = new Set();
     this.warningMemory = {};
     this.offscreenSince = 0;
+    this.launchStartedAt = 0;
+    this.launchStartPosition = null;
+    this.previousPearPosition = null;
     this.bossDropIndex = 0;
     this.stabilizeUntil = 0;
     this.segmentDamage = 0;
@@ -871,10 +885,13 @@ class PearScene extends Phaser.Scene {
       inLaunchZone: this.activeTransfer ? inZone(this.vehicle.x, this.activeTransfer.launchZoneX) : false,
     });
     this.launched = true;
+    this.launchStartedAt = this.time.now;
     setPearMood(this, this.pear, 'flying');
     const launchX = this.vehicle.x + 50;
     const launchY = this.vehicle.y - 48;
     this.detachPearForLaunch(this.pear, this.vehicle);
+    this.launchStartPosition = { x: this.pear.x, y: this.pear.y };
+    this.previousPearPosition = { ...this.launchStartPosition };
     const rocketBoost = this.currentVehicleType === 'rocket' ? 1.1 : 1;
     if (next) {
       const transition = this.activeTransfer;
@@ -941,6 +958,9 @@ class PearScene extends Phaser.Scene {
     this.launched = false;
     this.pendingRequiredVehicle = null;
     this.activeTransfer = null;
+    this.launchStartedAt = 0;
+    this.launchStartPosition = null;
+    this.previousPearPosition = null;
     const rating = perfect ? 'PERFECT' : good ? 'GOOD' : 'UGLY';
     this.attachPearToVehicle(this.pear, this.vehicle, rating);
     this.tweens.add({ targets: this.pear, scaleX: 1.22, scaleY: 0.76, duration: 120, yoyo: true, ease: 'Back.easeOut' });
@@ -1167,6 +1187,7 @@ class PearScene extends Phaser.Scene {
     this.checkFinish();
     this.updateVehicleDebug();
     this.emitHud();
+    this.previousPearPosition = this.launched ? { x: this.pear.x, y: this.pear.y } : null;
   }
 
   getSteer() {
@@ -1189,7 +1210,11 @@ class PearScene extends Phaser.Scene {
       if (coin.getData('collected')) {
         return;
       }
-      if (Phaser.Math.Distance.Between(target.x, target.y, coin.x, coin.y) < 48) {
+      const currentDistance = Phaser.Math.Distance.Between(target.x, target.y, coin.x, coin.y);
+      const flightDistance = this.launched && this.previousPearPosition
+        ? distanceToSegment({ x: coin.x, y: coin.y }, this.previousPearPosition, { x: target.x, y: target.y })
+        : Infinity;
+      if (Math.min(currentDistance, flightDistance) < 48) {
         coin.setData('collected', true);
         coin.destroy();
         this.collectedCoins += 1;
@@ -1197,6 +1222,24 @@ class PearScene extends Phaser.Scene {
         this.addScore(100, coin.x, coin.y, '+100');
       }
     });
+  }
+
+  canAutoCatchVehicle(vehicle, transition) {
+    const radius = this.getCatchRadius(transition);
+    const horizontalWindow = Math.max(90, Math.min(radius * 0.45, 170));
+    const verticalWindow = Math.max(70, Math.min(radius * 0.55, 150));
+    const flightMs = this.time.now - this.launchStartedAt;
+    const launchX = this.launchStartPosition?.x ?? this.vehicle?.x ?? 0;
+    const dx = this.pear.x - vehicle.x;
+    const dy = this.pear.y - (vehicle.y - 58);
+
+    return (
+      flightMs > 260
+      && this.pear.x > launchX + 180
+      && this.pear.body?.velocity?.x > 0
+      && Math.abs(dx) < horizontalWindow
+      && Math.abs(dy) < verticalWindow
+    );
   }
 
   checkNearMisses() {
@@ -1230,8 +1273,7 @@ class PearScene extends Phaser.Scene {
         return false;
       }
       const transition = vehicle.getData('transfer') || this.activeTransfer;
-      const radius = this.getCatchRadius(transition);
-      return Phaser.Math.Distance.Between(this.pear.x, this.pear.y, vehicle.x, vehicle.y - 58) < radius;
+      return this.canAutoCatchVehicle(vehicle, transition);
     });
     if (!target) {
       return;

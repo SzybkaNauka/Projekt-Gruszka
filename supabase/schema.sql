@@ -70,6 +70,61 @@ create table if not exists public.player_stats (
   updated_at timestamptz default now()
 );
 
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  raw_username text;
+  safe_username text;
+begin
+  raw_username := lower(coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1), 'pear_' || left(new.id::text, 8)));
+  safe_username := regexp_replace(raw_username, '[^a-z0-9_]', '', 'g');
+  if length(safe_username) < 3 then
+    safe_username := 'pear_' || left(new.id::text, 8);
+  end if;
+  safe_username := left(safe_username, 20);
+
+  insert into public.profiles (id, username, display_name, avatar_pear, best_level)
+  values (
+    new.id,
+    safe_username,
+    coalesce(new.raw_user_meta_data->>'display_name', safe_username),
+    coalesce(new.raw_user_meta_data->>'avatar_pear', 'knight'),
+    1
+  )
+  on conflict (id) do nothing;
+
+  insert into public.player_stats (user_id)
+  values (new.id)
+  on conflict (user_id) do nothing;
+
+  return new;
+exception
+  when unique_violation then
+    insert into public.profiles (id, username, display_name, avatar_pear, best_level)
+    values (
+      new.id,
+      'pear_' || left(new.id::text, 8),
+      coalesce(new.raw_user_meta_data->>'display_name', 'pear_' || left(new.id::text, 8)),
+      coalesce(new.raw_user_meta_data->>'avatar_pear', 'knight'),
+      1
+    )
+    on conflict (id) do nothing;
+    insert into public.player_stats (user_id)
+    values (new.id)
+    on conflict (user_id) do nothing;
+    return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_profile on auth.users;
+create trigger on_auth_user_created_profile
+after insert on auth.users
+for each row execute function public.handle_new_user_profile();
+
 do $$
 begin
   alter table public.level_scores add column if not exists premium_star_collected boolean default false;

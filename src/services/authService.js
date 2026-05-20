@@ -7,9 +7,19 @@ export async function getSession() {
   return data.session;
 }
 
-export async function signUpWithEmail(email, password) {
+export async function signUpWithEmail(email, password, profile = {}) {
   const client = requireSupabase();
-  const { data, error } = await client.auth.signUp({ email, password });
+  const { data, error } = await client.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        username: profile.username,
+        display_name: profile.display_name || profile.username,
+        avatar_pear: profile.avatar_pear || 'knight',
+      },
+    },
+  });
   if (error) throw error;
   return data;
 }

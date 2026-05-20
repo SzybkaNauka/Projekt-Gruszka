@@ -11,7 +11,7 @@ import ProfilePanel from './components/ProfilePanel.jsx';
 import LeaderboardPanel from './components/LeaderboardPanel.jsx';
 import FriendsPanel from './components/FriendsPanel.jsx';
 import { getSession, onAuthStateChange, signOut } from './services/authService.js';
-import { getProfile } from './services/profileService.js';
+import { ensureProfile, getProfile } from './services/profileService.js';
 import { flushPendingScores, queuePendingScore, submitOnlineScore } from './services/scoreService.js';
 import { isOnline, onOnline, onOffline } from './services/networkService.js';
 import { canUseFullscreen, isFullscreen, toggleFullscreen } from './services/fullscreenService.js';
@@ -128,13 +128,24 @@ export default function App() {
   React.useEffect(() => {
     let alive = true;
     getSession().then((nextSession) => {
-      if (alive) setSession(nextSession);
+      if (alive) {
+        setSession(nextSession);
+        if (nextSession?.user) {
+          getProfile(nextSession.user.id)
+            .then((existing) => existing || ensureProfile(nextSession.user))
+            .then((nextProfile) => { if (alive) setProfile(nextProfile); })
+            .catch(() => { if (alive) setProfile(null); });
+        } else {
+          setProfile(null);
+        }
+      }
     }).catch(() => {});
     const unsubscribeAuth = onAuthStateChange(async (nextSession) => {
       setSession(nextSession);
       if (nextSession?.user) {
         try {
-          const p = await getProfile(nextSession.user.id);
+          const existing = await getProfile(nextSession.user.id);
+          const p = existing || await ensureProfile(nextSession.user);
           setProfile(p);
         } catch {
           setProfile(null);
@@ -361,7 +372,11 @@ export default function App() {
       if (devParams.debug) {
         setOnlineStatus('DEV DEBUG: wynik niekwalifikowany do rankingu');
       } else if (session?.user && isOnline()) {
-        submitOnlineScore(scorePayload, session.user.id)
+        Promise.resolve(profile || ensureProfile(session.user).then((nextProfile) => {
+          setProfile(nextProfile);
+          return nextProfile;
+        }))
+          .then(() => submitOnlineScore(scorePayload, session.user.id))
           .then(() => setOnlineStatus('Wysłano do rankingu'))
           .catch(() => {
             queuePendingScore(scorePayload);

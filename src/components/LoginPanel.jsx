@@ -37,13 +37,19 @@ export default function LoginPanel({ onDone }) {
           setBusy(false);
           return;
         }
-        const data = await signUpWithEmail(email, password);
-        // try to create profile immediately if user id available
+        const data = await signUpWithEmail(email, password, { username: v.username, display_name: v.username });
+        // Create the profile only when Supabase also returned an active session.
+        // If email confirmation is enabled, App will create it after the first login.
         try {
-          if (data?.user) {
+          if (data?.session && data?.user) {
             await ensureProfile(data.user, { username: v.username });
           }
-          setStatus('Konto utworzone. Sprawdź email, jeśli Supabase wymaga potwierdzenia.');
+          if (data?.session) {
+            setStatus('Konto utworzone i zalogowane. Ranking jest gotowy.');
+            onDone?.();
+          } else {
+            setStatus('Konto utworzone. Sprawdź email, jeśli Supabase wymaga potwierdzenia. Profil utworzy się automatycznie po pierwszym logowaniu.');
+          }
         } catch (e) {
           if (e?.code === 'username_taken' || (e?.message || '').toLowerCase().includes('duplicate')) {
             setStatus('Ten nick jest już zajęty. Wybierz inny.');

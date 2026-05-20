@@ -9,12 +9,13 @@ function cleanUsername(username) {
 function validateUsernameRules(username) {
   const value = String(username || '');
   const norm = value.trim().toLowerCase();
-  if (norm.length < 3 || norm.length > 20) return { ok: false, message: 'Nick musi mieć 3–20 znaków.' };
-  if (!/^[a-z0-9_]+$/.test(norm)) return { ok: false, message: 'Nick może zawierać tylko litery, cyfry i znak _.' };
-  if (norm.includes('@') || /\S+@\S+\.\S+/.test(value)) return { ok: false, message: 'Nick nie może być adresem email.' };
+  if (norm.length < 3 || norm.length > 20) return { ok: false, message: 'Nick musi miec 3-20 znakow.' };
+  if (!/^[a-z0-9_]+$/.test(norm)) return { ok: false, message: 'Nick moze zawierac tylko litery, cyfry i znak _.' };
+  if (norm.includes('@') || /\S+@\S+\.\S+/.test(value)) return { ok: false, message: 'Nick nie moze byc adresem email.' };
   return { ok: true, username: norm };
 }
 export { validateUsernameRules };
+
 export async function checkUsernameAvailable(username) {
   const client = requireSupabase();
   try {
@@ -23,7 +24,7 @@ export async function checkUsernameAvailable(username) {
     const { data, error } = await client.from('profiles').select('id').eq('username', norm).maybeSingle();
     if (error) return false;
     return !data;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -35,15 +36,24 @@ export async function getProfile(userId) {
   return data;
 }
 
+function isUniqueError(error) {
+  const msg = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
+  return msg.includes('duplicate') || msg.includes('unique');
+}
+
 export async function ensureProfile(user, profile = {}) {
   const client = requireSupabase();
-  const suggested = profile.username || user.email?.split('@')[0] || `pear_${user.id.slice(0, 8)}`;
-  const username = cleanUsername(suggested);
+  const metadata = user.user_metadata || {};
+  const fallbackUsername = `pear_${user.id.slice(0, 8)}`;
+  const suggested = profile.username || metadata.username || user.email?.split('@')[0] || fallbackUsername;
+  let username = cleanUsername(suggested);
+  if (username.length < 3) username = fallbackUsername;
+  username = username.slice(0, 20);
   const payload = {
     id: user.id,
     username,
-    display_name: profile.display_name || username,
-    avatar_pear: avatarIds.includes(profile.avatar_pear) ? profile.avatar_pear : 'knight',
+    display_name: profile.display_name || metadata.display_name || username,
+    avatar_pear: avatarIds.includes(profile.avatar_pear || metadata.avatar_pear) ? (profile.avatar_pear || metadata.avatar_pear) : 'knight',
     best_level: 1,
   };
   try {
@@ -52,12 +62,20 @@ export async function ensureProfile(user, profile = {}) {
     await client.from('player_stats').upsert({ user_id: user.id }, { onConflict: 'user_id' });
     return data;
   } catch (err) {
-    // handle unique username violation gracefully
-    const msg = err?.message || '';
-    if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
-      const e = new Error('Ten nick jest już zajęty. Wybierz inny.');
-      e.code = 'username_taken';
-      throw e;
+    if (isUniqueError(err)) {
+      const fallbackPayload = {
+        ...payload,
+        username: fallbackUsername,
+        display_name: profile.display_name || metadata.display_name || fallbackUsername,
+      };
+      const { data, error } = await client.from('profiles').upsert(fallbackPayload, { onConflict: 'id' }).select('*').single();
+      if (error) {
+        const e = new Error('Ten nick jest juz zajety. Wybierz inny.');
+        e.code = 'username_taken';
+        throw e;
+      }
+      await client.from('player_stats').upsert({ user_id: user.id }, { onConflict: 'user_id' });
+      return data;
     }
     throw err;
   }
@@ -76,9 +94,8 @@ export async function updateProfile(userId, profile) {
     if (error) throw error;
     return data;
   } catch (err) {
-    const msg = err?.message || '';
-    if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
-      const e = new Error('Ten nick jest już zajęty. Wybierz inny.');
+    if (isUniqueError(err)) {
+      const e = new Error('Ten nick jest juz zajety. Wybierz inny.');
       e.code = 'username_taken';
       throw e;
     }

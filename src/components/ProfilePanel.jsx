@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ensureProfile, getPlayerStats, getProfile, updateProfile } from '../services/profileService.js';
 import { getSave } from '../game/storage.js';
+import { DUEL_ACHIEVEMENTS } from '../game/constants.js';
+import { getMyDuelAchievements, getMyDuelHistory, getMyDuelStats } from '../services/duelService.js';
 
 const avatars = ['knight', 'winged', 'super', 'pirate', 'racer', 'gladiator', 'stunt', 'rocket', 'ninja', 'royal'];
 
@@ -44,6 +46,9 @@ function formatDate(value) {
 export default function ProfilePanel({ session }) {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
+  const [duelStats, setDuelStats] = useState(null);
+  const [duelHistory, setDuelHistory] = useState([]);
+  const [duelAchievements, setDuelAchievements] = useState([]);
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const save = useMemo(() => getSave(), []);
@@ -56,9 +61,17 @@ export default function ProfilePanel({ session }) {
         const existing = await getProfile(session.user.id);
         const nextProfile = existing || await ensureProfile(session.user);
         const nextStats = await getPlayerStats(session.user.id);
+        const [nextDuelStats, nextDuelHistory, nextDuelAchievements] = await Promise.all([
+          getMyDuelStats(session.user.id).catch(() => null),
+          getMyDuelHistory(session.user.id, 5).catch(() => []),
+          getMyDuelAchievements(session.user.id).catch(() => []),
+        ]);
         if (alive) {
           setProfile(nextProfile);
           setStats(nextStats);
+          setDuelStats(nextDuelStats);
+          setDuelHistory(nextDuelHistory);
+          setDuelAchievements(nextDuelAchievements);
         }
       } catch (error) {
         if (alive) setStatus(error.message || 'Nie udało się wczytać profilu.');
@@ -85,6 +98,7 @@ export default function ProfilePanel({ session }) {
   const totalStars = useMemo(() => Object.values(save.starsByLevel).reduce((sum, value) => sum + Number(value || 0), 0), [save.starsByLevel]);
   const completedLevels = useMemo(() => Object.keys(save.starsByLevel).length, [save.starsByLevel]);
   const title = useMemo(() => getTitle(totalStars), [totalStars]);
+  const duelWinrate = duelStats?.duel_matches ? Math.round((Number(duelStats.duel_wins || 0) / Number(duelStats.duel_matches || 1)) * 100) : 0;
 
   if (!session?.user) {
     return (
@@ -151,6 +165,41 @@ export default function ProfilePanel({ session }) {
         </div>
       </div>
 
+      <div className="profile-stats-card">
+        <h3>DUEL PvP</h3>
+        <div className="stat-row"><strong>{duelStats?.duel_matches || 0}</strong><span>Mecze</span></div>
+        <div className="stat-row"><strong>{duelStats?.duel_wins || 0}</strong><span>Wygrane</span></div>
+        <div className="stat-row"><strong>{duelStats?.duel_losses || 0}</strong><span>Porazki</span></div>
+        <div className="stat-row"><strong>{duelStats?.duel_draws || 0}</strong><span>Remisy</span></div>
+        <div className="stat-row"><strong>{duelWinrate}%</strong><span>Winrate</span></div>
+        <div className="stat-row"><strong>{duelStats?.duel_mvp_count || 0}</strong><span>MVP</span></div>
+        <div className="duel-progress-list">
+          {duelHistory.map((item) => {
+            const winner = item.duel_results?.winner_team;
+            const result = !winner ? 'DRAW' : winner === item.team ? 'WIN' : 'LOSE';
+            return (
+              <div className="duel-progress-row" key={item.id}>
+                <span>{item.duel_results?.mode || 'DUEL'} L{item.duel_results?.level_id || '?'}</span>
+                <b>{result}</b>
+                <em>{item.score}</em>
+              </div>
+            );
+          })}
+          {!duelHistory.length && <p className="small-note">Brak historii DUEL.</p>}
+        </div>
+        <div className="duel-achievement-grid">
+          {Object.values(DUEL_ACHIEVEMENTS).map((achievement) => {
+            const unlocked = duelAchievements.some((item) => item.achievement_key === achievement.key);
+            return (
+              <div className={`duel-achievement ${unlocked ? 'unlocked' : ''}`} key={achievement.key}>
+                <strong>{achievement.name}</strong>
+                <span>{unlocked ? 'odblokowana' : achievement.description}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="profile-edit-grid">
         <label>
           Username
@@ -166,6 +215,21 @@ export default function ProfilePanel({ session }) {
             {avatars.map((avatar) => (
               <option key={avatar} value={avatar}>{avatarLabels[avatar] || avatar}</option>
             ))}
+          </select>
+        </label>
+        <label>
+          Losowe zaproszenia
+          <select value={profile.allow_random_invites === false ? 'off' : 'on'} onChange={(event) => setProfile({ ...profile, allow_random_invites: event.target.value === 'on' })}>
+            <option value="on">wlaczone</option>
+            <option value="off">wylaczone</option>
+          </select>
+        </label>
+        <label>
+          Zaproszenia DUEL
+          <select value={profile.allow_duel_invites_from || 'everyone'} onChange={(event) => setProfile({ ...profile, allow_duel_invites_from: event.target.value })}>
+            <option value="everyone">wszyscy</option>
+            <option value="friends">tylko znajomi</option>
+            <option value="none">nikt</option>
           </select>
         </label>
       </div>

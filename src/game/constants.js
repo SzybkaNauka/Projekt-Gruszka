@@ -133,11 +133,15 @@ export const PRE_START_COUNTDOWN_MS = 5000;
 export const DUEL_EVENT_SEND_INTERVAL_MS = 150;
 export const DUEL_POSITION_SEND_INTERVAL_MS = 150;
 export const DUEL_SCORE_SEND_INTERVAL_MS = 750;
+export const DUEL_COUNTDOWN_MS = 5000;
 export const DUEL_ATTACK_GRACE_MS = 3000;
 export const DUEL_HIT_INVULNERABILITY_MS = 1200;
+export const DUEL_GLOBAL_POWERUP_COOLDOWN_MS = 800;
 export const DUEL_MAX_HELD_POWERUPS = 1;
 export const DUEL_POWERUP_RESPAWN_MS = 8000;
 export const DUEL_TRAP_WARNING_MS = 800;
+export const DUEL_EVENT_TTL_MS = 10000;
+export const DUEL_STALE_SNAPSHOT_MS = 3000;
 
 export const DUEL_MODES = {
   '1v1': { label: '1v1', maxPlayers: 2, teamSize: 1 },
@@ -148,19 +152,30 @@ export const DUEL_MODES = {
 };
 
 export const DUEL_POWERUPS = {
-  rotten_tomato: { type: 'rotten_tomato', name: 'Zgnily Pomidor', category: 'attack', cooldownMs: 3400, durationMs: 1500, color: 0xe64135 },
-  onion_tear: { type: 'onion_tear', name: 'Cebulowa Lza', category: 'trap', cooldownMs: 3800, durationMs: 2600, color: 0xd5b2ff },
-  carrot_spike: { type: 'carrot_spike', name: 'Marchewkowy Kolec', category: 'trap', cooldownMs: 4200, durationMs: 5000, color: 0xff8a22 },
-  broccoli_wall: { type: 'broccoli_wall', name: 'Brokulowa Barykada', category: 'trap', cooldownMs: 5200, durationMs: 5200, color: 0x3e9b45 },
-  pumpkin_mine: { type: 'pumpkin_mine', name: 'Dyniowa Mina', category: 'trap', cooldownMs: 7000, durationMs: 6500, color: 0xf08a25 },
-  pear_shield: { type: 'pear_shield', name: 'Tarcza Gruszki', category: 'defense', cooldownMs: 5000, durationMs: 3000, color: 0x6bd6ff },
-  anti_slip: { type: 'anti_slip', name: 'Anty-poslizg', category: 'defense', cooldownMs: 4600, durationMs: 4000, color: 0x9df75b },
-  reflect_attack: { type: 'reflect_attack', name: 'Odbicie Ataku', category: 'defense', cooldownMs: 8200, durationMs: 3500, color: 0xfff3a6 },
-  turbo_juice: { type: 'turbo_juice', name: 'Turbo Sok', category: 'boost', cooldownMs: 4300, durationMs: 1600, color: 0xffd34a },
-  magnet_seed: { type: 'magnet_seed', name: 'Magnetyczna Pestka', category: 'boost', cooldownMs: 4800, durationMs: 5000, color: 0xf4d75c },
-  team_boost: { type: 'team_boost', name: 'Team Boost', category: 'team_support', cooldownMs: 9000, durationMs: 2200, color: 0x74e35c },
-  veggie_fog: { type: 'veggie_fog', name: 'Warzywna Mgla', category: 'chaos', cooldownMs: 5200, durationMs: 2000, color: 0xcfd8dc },
-  lane_swap: { type: 'lane_swap', name: 'Zamiana Toru', category: 'chaos', cooldownMs: 5600, durationMs: 900, color: 0xb9b9ff },
-  combo_steal: { type: 'combo_steal', name: 'Kradziez Combo', category: 'chaos', cooldownMs: 6200, durationMs: 0, color: 0x8c4bc6 },
-  sabotage_jump: { type: 'sabotage_jump', name: 'Sabotaz Skoku', category: 'chaos', cooldownMs: 6800, durationMs: 1000, color: 0x22242b },
+  rotten_tomato: { id: 'rotten_tomato', type: 'rotten_tomato', pvpType: 'offensive', name: 'Zgnily Pomidor', category: 'attack', rarity: 'common', cooldownMs: 6000, durationMs: 1500, targetMode: 'nearest_enemy', effectStrength: 0.35, warningMs: 0, icon: 'POM', description: 'Splash i krotki slow na najblizszego przeciwnika.', color: 0xe64135 },
+  onion_tear: { id: 'onion_tear', type: 'onion_tear', pvpType: 'offensive', name: 'Cebulowa Lza', category: 'trap', rarity: 'common', cooldownMs: 7000, durationMs: 2600, targetMode: 'trap_ahead', effectStrength: 0.42, warningMs: 800, icon: 'CEB', description: 'Sliska plama przed celem.', color: 0xd5b2ff },
+  carrot_spike: { id: 'carrot_spike', type: 'carrot_spike', pvpType: 'offensive', name: 'Marchewkowy Kolec', category: 'trap', rarity: 'common', cooldownMs: 6000, durationMs: 5000, targetMode: 'trap_behind', effectStrength: 0.45, warningMs: 800, icon: 'KOL', description: 'Male kolce za graczem.', color: 0xff8a22 },
+  broccoli_wall: { id: 'broccoli_wall', type: 'broccoli_wall', pvpType: 'offensive', name: 'Brokulowa Barykada', category: 'trap', rarity: 'rare', cooldownMs: 9000, durationMs: 5200, targetMode: 'trap_ahead', effectStrength: 0.58, warningMs: 800, icon: 'BRO', description: 'Omijalna barykada na trasie.', color: 0x3e9b45 },
+  pumpkin_mine: { id: 'pumpkin_mine', type: 'pumpkin_mine', pvpType: 'offensive', name: 'Dyniowa Mina', category: 'trap', rarity: 'rare', cooldownMs: 10000, durationMs: 6500, targetMode: 'trap_behind', effectStrength: 0.7, warningMs: 900, icon: 'MIN', description: 'Mina z knockiem i przerwaniem combo.', color: 0xf08a25 },
+  pear_shield: { id: 'pear_shield', type: 'pear_shield', pvpType: 'defensive', name: 'Tarcza Gruszki', category: 'defense', rarity: 'rare', cooldownMs: 8000, durationMs: 3000, targetMode: 'self', effectStrength: 1, warningMs: 0, icon: 'TAR', description: 'Blokuje nastepny ofensywny efekt.', color: 0x6bd6ff },
+  anti_slip: { id: 'anti_slip', type: 'anti_slip', pvpType: 'defensive', name: 'Anty-poslizg', category: 'defense', rarity: 'rare', cooldownMs: 7000, durationMs: 4000, targetMode: 'self', effectStrength: 0.75, warningMs: 0, icon: 'ANT', description: 'Zmniejsza poslizg po cebuli.', color: 0x9df75b },
+  reflect_attack: { id: 'reflect_attack', type: 'reflect_attack', pvpType: 'defensive', name: 'Odbicie Ataku', category: 'defense', rarity: 'epic', cooldownMs: 11000, durationMs: 3500, targetMode: 'self', effectStrength: 1, warningMs: 0, icon: 'ODB', description: 'Nastepny atak wraca do nadawcy.', color: 0xfff3a6 },
+  turbo_juice: { id: 'turbo_juice', type: 'turbo_juice', pvpType: 'boost', name: 'Turbo Sok', category: 'boost', rarity: 'common', cooldownMs: 7000, durationMs: 1600, targetMode: 'self', effectStrength: 0.55, warningMs: 0, icon: 'TUR', description: 'Krotki ryzykowny speed boost.', color: 0xffd34a },
+  magnet_seed: { id: 'magnet_seed', type: 'magnet_seed', pvpType: 'boost', name: 'Magnetyczna Pestka', category: 'boost', rarity: 'common', cooldownMs: 7000, durationMs: 5000, targetMode: 'self', effectStrength: 0.5, warningMs: 0, icon: 'MAG', description: 'Przyciaga monety przez kilka sekund.', color: 0xf4d75c },
+  team_boost: { id: 'team_boost', type: 'team_boost', pvpType: 'team', name: 'Team Boost', category: 'team_support', rarity: 'epic', cooldownMs: 12000, durationMs: 2200, targetMode: 'own_team', effectStrength: 0.5, warningMs: 0, icon: 'T+B', description: 'Boost dla calej druzyny.', color: 0x74e35c },
+  veggie_fog: { id: 'veggie_fog', type: 'veggie_fog', pvpType: 'chaos', name: 'Warzywna Mgla', category: 'chaos', rarity: 'rare', cooldownMs: 8000, durationMs: 2000, targetMode: 'enemy_team', effectStrength: 0.28, warningMs: 0, icon: 'MGL', description: 'Lekka mgla dla przeciwnikow.', color: 0xcfd8dc },
+  lane_swap: { id: 'lane_swap', type: 'lane_swap', pvpType: 'chaos', name: 'Zamiana Toru', category: 'chaos', rarity: 'epic', cooldownMs: 9000, durationMs: 900, targetMode: 'nearest_enemy', effectStrength: 0.35, warningMs: 400, icon: 'TOR', description: 'Wymusza mala korekte toru.', color: 0xb9b9ff },
+  combo_steal: { id: 'combo_steal', type: 'combo_steal', pvpType: 'chaos', name: 'Kradziez Combo', category: 'chaos', rarity: 'epic', cooldownMs: 9000, durationMs: 0, targetMode: 'nearest_enemy', effectStrength: 0.4, warningMs: 0, icon: 'KOM', description: 'Daje bonus atakujacemu bez zabierania score ofierze.', color: 0x8c4bc6 },
+  sabotage_jump: { id: 'sabotage_jump', type: 'sabotage_jump', pvpType: 'chaos', name: 'Sabotaz Skoku', category: 'chaos', rarity: 'epic', cooldownMs: 11000, durationMs: 1000, targetMode: 'nearest_enemy', effectStrength: 0.3, warningMs: 500, icon: 'SAB', description: 'Bardzo krotki debuff skoku.', color: 0x22242b },
+};
+
+export const DUEL_ACHIEVEMENTS = {
+  first_blood: { key: 'first_blood', name: 'Pierwsza Krew', description: 'Pierwsza wygrana DUEL.' },
+  master_1v1: { key: 'master_1v1', name: 'Mistrz 1v1', description: '10 wygranych DUEL 1v1.' },
+  team_king: { key: 'team_king', name: 'Druzynowy Krol', description: '10 wygranych w trybach team.' },
+  mvp_pear: { key: 'mvp_pear', name: 'MVP Gruszka', description: '5 razy MVP w DUEL.' },
+  broccoli_slayer: { key: 'broccoli_slayer', name: 'Pogromca Brokulow', description: 'Wygrana na bossowym levelu PvP.' },
+  rocket_dominator: { key: 'rocket_dominator', name: 'Rakietowy Dominator', description: 'Wygrana na szybkim levelu PvP.' },
+  undefeated: { key: 'undefeated', name: 'Niepokonany', description: '5 zwyciestw z rzedu.' },
+  comeback_legend: { key: 'comeback_legend', name: 'Powrot Legendy', description: 'Wygrana po poprzedniej porazce.' },
 };

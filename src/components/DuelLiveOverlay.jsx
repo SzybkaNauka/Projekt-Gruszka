@@ -7,7 +7,7 @@ function teamScore(players, team) {
     .reduce((sum, player) => sum + Number(player.score || 0) + (player.finished ? 1500 : 0) + (player.premium_star_collected ? 900 : 0), 0);
 }
 
-export default function DuelLiveOverlay({ room, players = [], currentUserId, heldPowerup, duelHud }) {
+export default function DuelLiveOverlay({ room, players = [], currentUserId, heldPowerup, duelHud, debug = false, eventsCount = 0 }) {
   if (!room) return null;
   const sorted = [...players].sort((a, b) => Number(b.progress_percent || 0) - Number(a.progress_percent || 0)).slice(0, 5);
   const currentPlayer = players.find((player) => player.user_id === currentUserId);
@@ -20,9 +20,9 @@ export default function DuelLiveOverlay({ room, players = [], currentUserId, hel
         <span className="team-b">B {teamScore(players, 'B')}</span>
       </div>
       <div className="duel-held-power">
-        <span>POWER</span>
-        <strong>{held?.name || 'pusty'}</strong>
-        <em>{duelHud?.status || room.status}</em>
+        <span>{held?.icon || 'POWER'}</span>
+        <strong>{held?.name || 'Brak power-upa'}</strong>
+        <em>{held ? 'E / Shift: POWER' : (duelHud?.status || room.status)}</em>
       </div>
       <div className="duel-progress-list">
         {sorted.map((player) => (
@@ -33,6 +33,14 @@ export default function DuelLiveOverlay({ room, players = [], currentUserId, hel
           </div>
         ))}
       </div>
+      {debug && (
+        <div className="duel-debug">
+          <span>{room.status}</span>
+          <span>players {players.length}</span>
+          <span>snap {currentPlayer?.last_snapshot_at ? Math.max(0, Math.round((Date.now() - new Date(currentPlayer.last_snapshot_at).getTime()) / 1000)) : '?'}s</span>
+          <span>events {eventsCount}</span>
+        </div>
+      )}
     </div>
   );
 }

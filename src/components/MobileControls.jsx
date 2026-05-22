@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 
 const EMPTY_INPUT = { left: false, right: false, up: false, down: false, jump: false, jumpHeld: false, jumpPressed: false, power: false, powerPressed: false };
 
-export default function MobileControls({ mobileInputRef, visible = true, disabled = false, showPower = false, powerLabel = 'POWER' }) {
+export default function MobileControls({ mobileInputRef, visible = true, disabled = false, showPower = false, powerLabel = 'POWER', powerDisabled = false }) {
   const pointerMap = useRef({});
   const [active, setActive] = React.useState({});
 
@@ -73,7 +73,7 @@ export default function MobileControls({ mobileInputRef, visible = true, disable
 
       <div className="mobile-actions">
         {showPower && (
-          <button className={`mobile-power-button ${active.power ? 'active' : ''}`} data-control="power" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={onUp}>{powerLabel}</button>
+          <button className={`mobile-power-button ${active.power ? 'active' : ''}`} data-control="power" disabled={powerDisabled} onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={onUp}>{powerLabel}</button>
         )}
         <button className={`mobile-jump-button ${active.jump ? 'active' : ''}`} data-control="jump" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={onUp}>SKOK</button>
       </div>

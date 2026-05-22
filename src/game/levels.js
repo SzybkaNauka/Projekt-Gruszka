@@ -219,13 +219,13 @@ function buildDuelConfig({ id, theme, tierName, road, length, transitions, finis
     .filter((_, index) => index % 4 === 2)
     .map((spawn, index) => ({ id: `duel_l${id}_team_${index + 1}`, x: spawn.x + 120, y: road.bottom - 80, radius: 120 }));
   const handcrafted = {
-    1: { recommendedModes: ['1v1', '2v2'], note: 'training duel with clear tomato and shield lines' },
-    5: { recommendedModes: ['1v1', '2v2', '3v3'], note: 'pumpkin highway speed lanes favor turbo and mines' },
-    10: { recommendedModes: ['1v1', '2v2'], note: 'boss arena disables attacks during hardest drops' },
-    20: { recommendedModes: ['2v2', '3v3'], note: 'mini boss routes give team boost windows' },
-    30: { recommendedModes: ['2v2', '3v3', '4v4'], note: 'advanced arena with readable trap lanes' },
-    40: { recommendedModes: ['3v3', '4v4'], note: 'very hard team race with fewer global effects' },
-    50: { recommendedModes: ['4v4', '5v5'], note: 'legendary chaos with simplified ghosts' },
+    1: { recommendedModes: ['1v1'], maxRecommendedPlayers: 2, note: 'easy 1v1 tutorial duel with clear tomato and shield lines' },
+    5: { recommendedModes: ['1v1'], maxRecommendedPlayers: 2, note: 'speed/drift 1v1 duel with turbo and onion reads' },
+    10: { recommendedModes: ['1v1', '2v2'], maxRecommendedPlayers: 4, note: 'boss arena disables attacks during hardest drops' },
+    20: { recommendedModes: ['2v2'], maxRecommendedPlayers: 4, note: 'medium team test with team boost windows' },
+    30: { recommendedModes: ['2v2', '3v3'], maxRecommendedPlayers: 6, note: 'advanced arena with readable trap lanes' },
+    40: { recommendedModes: ['3v3', '4v4'], maxRecommendedPlayers: 8, note: 'very hard team race with fewer global effects' },
+    50: { recommendedModes: ['4v4', '5v5'], maxRecommendedPlayers: 10, note: 'legendary chaos with simplified ghosts' },
   }[id];
   return {
     enabled: true,
@@ -237,7 +237,7 @@ function buildDuelConfig({ id, theme, tierName, road, length, transitions, finis
     attackDisabledZones,
     teamBoostZones,
     recommendedModes: handcrafted?.recommendedModes || (world <= 1 ? ['1v1', '2v2'] : world <= 3 ? ['2v2', '3v3', '4v4'] : ['3v3', '4v4', '5v5']),
-    maxRecommendedPlayers: world <= 1 ? 4 : world <= 3 ? 8 : 10,
+    maxRecommendedPlayers: handcrafted?.maxRecommendedPlayers || (world <= 1 ? 4 : world <= 3 ? 8 : 10),
     note: handcrafted?.note || 'generated arcade PvP overlay',
   };
 }

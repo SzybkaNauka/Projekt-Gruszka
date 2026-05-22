@@ -86,6 +86,8 @@ export async function updateProfile(userId, profile) {
   const payload = {
     display_name: profile.display_name || null,
     avatar_pear: avatarIds.includes(profile.avatar_pear) ? profile.avatar_pear : 'knight',
+    allow_random_invites: profile.allow_random_invites !== false,
+    allow_duel_invites_from: profile.allow_duel_invites_from || 'everyone',
     updated_at: new Date().toISOString(),
   };
   if (profile.username) payload.username = cleanUsername(profile.username);
@@ -101,6 +103,23 @@ export async function updateProfile(userId, profile) {
     }
     throw err;
   }
+}
+
+export async function updatePresence(userId, duelStatus = 'available') {
+  if (!userId) return null;
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('profiles')
+    .update({
+      duel_status: duelStatus,
+      last_seen_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
+    .select('*')
+    .maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
 export async function getPlayerStats(userId) {

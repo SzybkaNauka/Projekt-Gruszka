@@ -12,12 +12,32 @@ import LeaderboardPanel from './components/LeaderboardPanel.jsx';
 import FriendsPanel from './components/FriendsPanel.jsx';
 import DuelPanel from './components/DuelPanel.jsx';
 import DuelLiveOverlay from './components/DuelLiveOverlay.jsx';
+import DailyChallengePanel from './components/DailyChallengePanel.jsx';
+import TournamentPanel from './components/TournamentPanel.jsx';
+import SeasonPassPanel from './components/SeasonPassPanel.jsx';
+import CosmeticsPanel from './components/CosmeticsPanel.jsx';
+import ShopPanel from './components/ShopPanel.jsx';
+import DailyRewardPanel from './components/DailyRewardPanel.jsx';
+import OnboardingPanel from './components/OnboardingPanel.jsx';
+import MainMenu from './components/MainMenu.jsx';
+import StudioSplash from './components/StudioSplash.jsx';
+import StudioAboutPanel from './components/StudioAboutPanel.jsx';
+import FirstRunConsentPanel from './components/FirstRunConsentPanel.jsx';
+import ContactPanel from './components/ContactPanel.jsx';
+import PrivacySettingsPanel from './components/PrivacySettingsPanel.jsx';
+import PlaytestPanel from './components/PlaytestPanel.jsx';
+import TesterInstructionsPanel from './components/TesterInstructionsPanel.jsx';
+import LegalPanel from './components/legal/LegalPanel.jsx';
 import { getSession, onAuthStateChange, signOut } from './services/authService.js';
-import { ensureProfile, getProfile } from './services/profileService.js';
+import { ensureProfile, getProfile, updatePresence } from './services/profileService.js';
 import { flushPendingScores, queuePendingScore, submitOnlineScore } from './services/scoreService.js';
 import { isOnline, onOnline, onOffline } from './services/networkService.js';
 import { canUseFullscreen, isFullscreen, toggleFullscreen } from './services/fullscreenService.js';
-import { clearHeldPowerup, finishDuelRoom, sendDuelEvent, sendPlayerSnapshot, subscribeDuelEvents, subscribePlayers } from './services/duelService.js';
+import { clearHeldPowerup, createRematchRoom, finalizeDuelViaEdgeFunction, leaveDuelRoom, sendDuelEvent, sendPlayerSnapshot, subscribeDuelEvents, subscribePlayers, subscribeRoom } from './services/duelService.js';
+import { grantSeeds, grantXp, submitDailyScore, unlockGlobalAchievement } from './services/liveOpsService.js';
+import { getAnalyticsEnabled, getGuestId, reportClientError, setAnalyticsEnabled, trackEvent } from './services/analyticsService.js';
+import { getConsentState, hasRequiredConsents, saveConsentState, saveOptionalConsents } from './services/consentService.js';
+import { APP_VERSION, BUILD_CHANNEL, BUILD_DATE, getRuntimeEnvironment, isFirebaseFrontendConfigured, isPwaMode, isSupabaseFrontendConfigured } from './config/appConfig.js';
 
 const GameShell = lazy(() => import('./components/GameShell.jsx'));
 
@@ -30,6 +50,10 @@ const levelWorlds = [
 ];
 
 const PERFORMANCE_STORAGE_KEY = 'gruszka-katapulta-performance-v1';
+const ONBOARDING_STORAGE_KEY = 'gruszka-onboarding-seen-v1';
+const SHOW_STUDIO_INTRO_KEY = 'showStudioIntro';
+const HAS_SEEN_STUDIO_INTRO_KEY = 'hasSeenStudioIntro';
+const ONLINE_CONSENT_SCREENS = new Set(['login', 'profile', 'leaderboard', 'friends', 'duel', 'daily', 'weekly', 'season', 'cosmetics', 'shop']);
 
 function getDevParams() {
   if (typeof window === 'undefined') return { enabled: false, debug: false, level: null, unlockAll: false, playtest: false };
@@ -61,7 +85,23 @@ function starsText(count = 0) {
 export default function App() {
   const devParams = useMemo(() => getDevParams(), []);
   const [screen, setScreen] = useState(devParams.level ? 'game' : 'menu');
-  const [showSplash, setShowSplash] = useState(() => !sessionStorage.getItem('wrs-splash-seen'));
+  const [showStudioIntroSetting, setShowStudioIntroSetting] = useState(() => {
+    const stored = localStorage.getItem(SHOW_STUDIO_INTRO_KEY);
+    return stored == null ? true : stored === 'true';
+  });
+  const [showSplash, setShowSplash] = useState(() => {
+    if (devParams.level) return false;
+    const introEnabled = localStorage.getItem(SHOW_STUDIO_INTRO_KEY);
+    if (introEnabled === 'false') return false;
+    return !sessionStorage.getItem('wrs-splash-seen');
+  });
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem(ONBOARDING_STORAGE_KEY));
+  const [showDailyReward, setShowDailyReward] = useState(true);
+  const [analyticsEnabled, setAnalyticsEnabledState] = useState(() => getAnalyticsEnabled());
+  const [marketingConsent, setMarketingConsentState] = useState(() => getConsentState(devParams.playtest).marketingConsent);
+  const [showConsentPanel, setShowConsentPanel] = useState(() => !hasRequiredConsents(devParams.playtest));
+  const [legalTab, setLegalTab] = useState(null);
+  const [dailyChallengeRun, setDailyChallengeRun] = useState(null);
   const [save, setSave] = useState(() => {
     const initial = devParams.unlockAll ? setUnlockedLevel(MAX_LEVEL) : getSave();
     setAudioEnabled(initial.soundEnabled);
@@ -106,7 +146,10 @@ export default function App() {
   });
   const buildInfo = useMemo(() => {
     return {
-      version: import.meta.env.VITE_APP_VERSION || '1.0.0',
+      version: APP_VERSION,
+      buildDate: BUILD_DATE,
+      channel: BUILD_CHANNEL,
+      environment: getRuntimeEnvironment(),
       dev: import.meta.env.DEV ?? false,
     };
   }, []);
@@ -115,6 +158,12 @@ export default function App() {
   const [duelPlayers, setDuelPlayers] = useState([]);
   const [duelEvents, setDuelEvents] = useState([]);
   const [duelHud, setDuelHud] = useState({ heldPowerup: null, status: 'LOBBY', stats: {} });
+  const [duelJoinCode, setDuelJoinCode] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('duelRoom') || '';
+  });
+  const [toasts, setToasts] = useState([]);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const duelPlayersRef = useRef([]);
   const duelEventsRef = useRef([]);
 
@@ -127,6 +176,7 @@ export default function App() {
     () => Object.values(save.premiumStarsByLevel || {}).filter(Boolean).length,
     [save.premiumStarsByLevel],
   );
+  const playtestToolsEnabled = devParams.playtest || devParams.debug || import.meta.env.DEV;
 
   React.useEffect(() => {
     duelPlayersRef.current = duelPlayers;
@@ -141,6 +191,24 @@ export default function App() {
       runCampaignSanityCheck();
     }
   }, [devParams.debug]);
+
+  React.useEffect(() => {
+    const onUpdateAvailable = () => setUpdateAvailable(true);
+    window.addEventListener('app-update-available', onUpdateAvailable);
+    return () => window.removeEventListener('app-update-available', onUpdateAvailable);
+  }, []);
+
+  React.useEffect(() => {
+    trackEvent('app_open', { version: buildInfo.version, playtest: devParams.playtest }, { userId: session?.user?.id });
+    const onError = (event) => reportClientError(event.error || event.message, 'window.onerror', { message: event.message }, { userId: session?.user?.id });
+    const onRejection = (event) => reportClientError(event.reason, 'unhandledrejection', {}, { userId: session?.user?.id });
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, [buildInfo.version, devParams.playtest, session?.user?.id]);
 
   React.useEffect(() => {
     let alive = true;
@@ -189,20 +257,78 @@ export default function App() {
   }, [session?.user?.id]);
 
   React.useEffect(() => {
+    if (!duelJoinCode) return;
+    if (!hasRequiredConsents(devParams.playtest)) {
+      setShowConsentPanel(true);
+      setOnlineStatus('Zaakceptuj dokumenty, zeby dolaczyc do DUEL.');
+      return;
+    }
+    if (!session?.user) {
+      setScreen('login');
+      setOnlineStatus('Zaloguj sie, zeby dolaczyc do DUEL.');
+      return;
+    }
+    setScreen('duel');
+  }, [duelJoinCode, session?.user?.id]);
+
+  function clearDuelJoinParam() {
+    setDuelJoinCode('');
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('duelRoom');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  }
+
+  function addToast(text, tone = 'info') {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((current) => [...current.slice(-2), { id, text, tone }]);
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 4200);
+  }
+
+  React.useEffect(() => {
     if (!duelRoom?.id) return undefined;
+    const unsubRoom = subscribeRoom(duelRoom.id, (nextRoom) => {
+      setDuelRoom((current) => ({ ...(current || {}), ...(nextRoom || {}) }));
+    });
     const unsubPlayers = subscribePlayers(duelRoom.id, setDuelPlayers);
     const unsubEvents = subscribeDuelEvents(duelRoom.id, (event) => {
       setDuelEvents((current) => [...current.slice(-60), event]);
     });
     return () => {
+      unsubRoom();
       unsubPlayers();
       unsubEvents();
     };
   }, [duelRoom?.id]);
 
   React.useEffect(() => {
+    if (!duelRoom?.id || !session?.user) return undefined;
+    const markLeft = () => {
+      leaveDuelRoom(duelRoom.id, session.user.id).catch(() => {});
+    };
+    window.addEventListener('pagehide', markLeft);
+    return () => window.removeEventListener('pagehide', markLeft);
+  }, [duelRoom?.id, session?.user?.id]);
+
+  React.useEffect(() => {
+    if (!session?.user) return undefined;
+    const status = screen === 'duelGame' ? 'in_duel' : screen === 'duel' ? 'in_lobby' : 'available';
+    const ping = () => updatePresence(session.user.id, status).catch(() => {});
+    ping();
+    const timer = window.setInterval(ping, 45000);
+    return () => window.clearInterval(timer);
+  }, [session?.user?.id, screen]);
+
+  React.useEffect(() => {
     localStorage.setItem(PERFORMANCE_STORAGE_KEY, JSON.stringify(performanceMode));
   }, [performanceMode]);
+
+  React.useEffect(() => {
+    localStorage.setItem(SHOW_STUDIO_INTRO_KEY, String(Boolean(showStudioIntroSetting)));
+  }, [showStudioIntroSetting]);
 
   React.useEffect(() => {
     const updateFullscreenState = () => {
@@ -231,17 +357,19 @@ export default function App() {
     } catch (e) {}
   }, [touchControlsEnabled]);
 
-  React.useEffect(() => {
-    if (!showSplash) return undefined;
-    const timeout = window.setTimeout(() => {
+  function finishStudioIntro() {
+    try {
       sessionStorage.setItem('wrs-splash-seen', '1');
-      setShowSplash(false);
-    }, 1850);
-    return () => window.clearTimeout(timeout);
-  }, [showSplash]);
+      localStorage.setItem(HAS_SEEN_STUDIO_INTRO_KEY, 'true');
+    } catch (error) {}
+    setShowSplash(false);
+  }
 
-  function startLevel(levelId) {
+  function startLevel(levelId, options = {}) {
     const safeLevelId = Math.min(MAX_LEVEL, Math.max(1, Number(levelId || 1)));
+    const dailyChallenge = options.dailyChallenge || null;
+    setDailyChallengeRun(dailyChallenge);
+    trackEvent('level_start', { level_id: safeLevelId, mode: dailyChallenge ? 'daily' : 'campaign' }, { userId: session?.user?.id });
     playSound('ui');
     setResult(null);
     setPaused(false);
@@ -261,9 +389,16 @@ export default function App() {
     setScreen('game');
   }
 
+  function startDailyChallenge(challenge) {
+    setDailyChallengeRun(challenge);
+    trackEvent('daily_started', { level_id: challenge.level_id, modifier: challenge.modifier_key, mode: 'daily' }, { userId: session?.user?.id });
+    startLevel(challenge.level_id, { dailyChallenge: challenge });
+  }
+
   function startDuelGame({ room, players = [], levelId }) {
     const safeLevelId = Math.min(MAX_LEVEL, Math.max(1, Number(levelId || room?.level_id || 1)));
     playSound('ui');
+    trackEvent('duel_started', { mode: room?.mode, level_id: safeLevelId }, { userId: session?.user?.id });
     setDuelRoom(room);
     setDuelPlayers(players);
     setDuelEvents([]);
@@ -287,6 +422,7 @@ export default function App() {
   }
 
   function playUnlocked() {
+    trackEvent(session?.user ? 'game_start' : 'guest_play', { mode: 'campaign' }, { userId: session?.user?.id });
     startLevel(highestUnlocked);
   }
 
@@ -342,6 +478,70 @@ export default function App() {
     setDuelRoom(null);
     setDuelHud({ heldPowerup: null, status: 'LOBBY', stats: {} });
     setScreen('menu');
+  }
+
+  function navigate(nextScreen) {
+    if (String(nextScreen).startsWith('legal:')) {
+      setLegalTab(String(nextScreen).split(':')[1] || 'terms');
+      setScreen('legal');
+      return;
+    }
+    if (ONLINE_CONSENT_SCREENS.has(nextScreen) && !hasRequiredConsents(devParams.playtest)) {
+      setShowConsentPanel(true);
+      setOnlineStatus('Zaakceptuj dokumenty, zeby wlaczyc funkcje online.');
+      return;
+    }
+    setScreen(nextScreen);
+  }
+
+  async function acceptFirstRunConsents(consents) {
+    await saveConsentState(consents, session?.user?.id || null);
+    setAnalyticsEnabled(consents.analyticsConsent);
+    setAnalyticsEnabledState(Boolean(consents.analyticsConsent));
+    setMarketingConsentState(Boolean(consents.marketingConsent));
+    setShowConsentPanel(false);
+    setOnlineStatus('Zgody zapisane.');
+  }
+
+  function completeOnboarding(nextScreen = 'menu') {
+    localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+    setShowOnboarding(false);
+    navigate(nextScreen);
+  }
+
+  function toggleAnalytics() {
+    const next = !analyticsEnabled;
+    setAnalyticsEnabled(next);
+    setAnalyticsEnabledState(next);
+    saveOptionalConsents({ analyticsConsent: next, marketingConsent });
+  }
+
+  function setMarketingConsent(next) {
+    setMarketingConsentState(Boolean(next));
+    saveOptionalConsents({ analyticsConsent: analyticsEnabled, marketingConsent: Boolean(next) });
+  }
+
+  async function logoutUser() {
+    await signOut();
+    setSession(null);
+    setProfile(null);
+    setScreen('menu');
+  }
+
+  async function copyLocalDataStatus() {
+    setOnlineStatus('Dane lokalne skopiowane do schowka');
+  }
+
+  async function abandonActiveDuel() {
+    if (duelRoom?.id && session?.user) {
+      await leaveDuelRoom(duelRoom.id, session.user.id).catch(() => {});
+    }
+    setDuelRoom(null);
+    setDuelPlayers([]);
+    setDuelEvents([]);
+    setDuelHud({ heldPowerup: null, status: 'LOBBY', stats: {} });
+    clearDuelJoinParam();
+    setOnlineStatus('Aktywny DUEL porzucony lokalnie.');
   }
 
   function nextLevel() {
@@ -406,6 +606,7 @@ export default function App() {
     }
 
     if (event.type === 'duel_powerup_collected' && duelRoom?.id && session?.user) {
+      addToast(`POWER: ${event.powerup?.name || 'zebrany'}`, 'duel');
       sendDuelEvent(duelRoom.id, {
         type: 'powerup_collected',
         senderUserId: session.user.id,
@@ -416,6 +617,7 @@ export default function App() {
     }
 
     if (event.type === 'duel_powerup_used' && duelRoom?.id && session?.user) {
+      addToast(`Uzyto ${event.powerup?.name || 'POWER'}`, 'duel');
       sendDuelEvent(duelRoom.id, {
         type: 'powerup_used',
         senderUserId: session.user.id,
@@ -445,9 +647,11 @@ export default function App() {
         score: event.score,
         stats: event.stats,
       }).catch(() => {});
-      if (duelRoom.host_user_id === session.user.id) {
-        finishDuelRoom(duelRoom.id, winner).catch(() => {});
-      }
+      setOnlineStatus('Finalizuje pojedynek...');
+      trackEvent('duel_finished', { roomId: duelRoom.id, mode: duelRoom.mode, result: event.type }, { userId: session.user.id });
+      finalizeDuelViaEdgeFunction(duelRoom.id)
+        .then(() => setOnlineStatus('Wynik DUEL zapisany'))
+        .catch(() => setOnlineStatus('Nie udalo sie zapisac wyniku - sprobujemy ponownie'));
       return;
     }
 
@@ -480,12 +684,27 @@ export default function App() {
         teamScoreA: duelPlayers.filter((player) => player.team === 'A').reduce((sum, player) => sum + Number(player.score || 0), event.totalScore && currentTeam === 'A' ? event.totalScore : 0),
         teamScoreB: duelPlayers.filter((player) => player.team === 'B').reduce((sum, player) => sum + Number(player.score || 0), event.totalScore && currentTeam === 'B' ? event.totalScore : 0),
         duelStats: event.duelStats || duelHud.stats || {},
+        duelRoom,
       });
       setPaused(false);
       return;
     }
 
     if (event.type === 'win') {
+      trackEvent(dailyChallengeRun ? 'daily_finished' : 'level_win', { level_id: event.level, score: event.totalScore, premiumStarCollected: event.premiumStarCollected, mode: dailyChallengeRun ? 'daily' : 'campaign' }, { userId: session?.user?.id });
+      if (session?.user) {
+        grantSeeds(session.user.id, 10 + (event.premiumStarCollected ? 50 : 0), 'level_win', { level: event.level }).catch(() => {});
+        grantXp(session.user.id, 60 + (event.premiumStarCollected ? 40 : 0), 'level_win').catch(() => {});
+        unlockGlobalAchievement(session.user.id, 'first_finish', { level: event.level }).catch(() => {});
+        if (event.premiumStarCollected) {
+          unlockGlobalAchievement(session.user.id, 'first_premium_star', { level: event.level }).catch(() => {});
+        }
+        if (dailyChallengeRun?.id) {
+          Promise.resolve(profile || ensureProfile(session.user))
+            .then((p) => submitDailyScore(dailyChallengeRun.id, session.user, p, event))
+            .catch(() => {});
+        }
+      }
       const nextSave = saveLevelResult(event.level, event.totalScore, event.stars, event.premiumStarCollected);
       const scorePayload = {
         level_id: event.level,
@@ -522,6 +741,12 @@ export default function App() {
     }
 
     if (event.type === 'lose') {
+      trackEvent('level_fail', { level_id: event.level, reason: event.failReason, mode: screen === 'duelGame' ? 'duel' : dailyChallengeRun ? 'daily' : 'campaign' }, { userId: session?.user?.id });
+      if (screen === 'duelGame') {
+        setResult({ ...event, duelMode: true, duelRoom, duelStats: event.duelStats || duelHud.stats || {}, message: event.message || 'DUEL zakonczony niepowodzeniem.' });
+        setPaused(false);
+        return;
+      }
       setResult({ ...event, message: event.message || loseTexts[Math.floor(Math.random() * loseTexts.length)] });
       setPaused(false);
     }
@@ -559,6 +784,20 @@ export default function App() {
       `Status sieci: ${getNetworkLabel()}`,
       `Informacja: ${onlineStatus}`,
       `Performance mode: ${performanceMode ? 'ON' : 'OFF'}`,
+      `App version: ${APP_VERSION}`,
+      `Build date: ${BUILD_DATE}`,
+      `Build channel: ${BUILD_CHANNEL}`,
+      `Environment: ${buildInfo.environment}`,
+      `User id: ${session?.user?.id || '-'}`,
+      `Guest id: ${getGuestId()}`,
+      `Screen: ${screen}`,
+      `Duel room id: ${duelRoom?.id || '-'}`,
+      `Touch controls: ${touchControlsEnabled ? 'ON' : 'OFF'}`,
+      `Supabase configured: ${isSupabaseFrontendConfigured() ? 'yes' : 'no'}`,
+      `Firebase configured: ${isFirebaseFrontendConfigured() ? 'yes' : 'no'}`,
+      `PWA mode: ${isPwaMode() ? 'yes' : 'no'}`,
+      `User agent: ${navigator.userAgent}`,
+      `URL: ${window.location.href}`,
     ].join('\n');
 
     try {
@@ -577,25 +816,110 @@ export default function App() {
 
     navigator.share({
       title: 'Gruszka Katapulta',
-      text: `Właśnie zrobiłem ${hud.score} punktów na poziomie ${selectedLevel} w Gruszka Katapulta!`,
+      text: result?.duelMode
+        ? `Wygrałem DUEL ${duelRoom?.mode || ''} w Gruszka Katapulta! Wynik: ${hud.score}. White Raven Studio.`
+        : `Właśnie zrobiłem ${hud.score} punktów na poziomie ${selectedLevel} w Gruszka Katapulta!`,
     }).catch(() => {
       setOnlineStatus('Udostępnianie anulowane lub niedostępne');
     });
   }
 
+  async function createDuelRematch() {
+    if (!duelRoom?.id || !session?.user) return;
+    try {
+      const p = profile || await ensureProfile(session.user);
+      const nextRoom = await createRematchRoom({ roomId: duelRoom.id, user: session.user, profile: p });
+      setDuelRoom(nextRoom);
+      setDuelPlayers([]);
+      setDuelEvents([]);
+      setResult(null);
+      setPaused(false);
+      setScreen('duel');
+      setOnlineStatus(`Rewanz gotowy: ${nextRoom.code}`);
+      addToast(`Rewanz: ${nextRoom.code}`, 'duel');
+    } catch (error) {
+      setOnlineStatus(error.message || 'Nie udalo sie stworzyc rewanzu.');
+    }
+  }
+
   return (
     <main className={`app ${fullscreenActive ? 'is-fullscreen' : ''} ${mobileFullscreenActive ? 'is-mobile-fullscreen' : ''}`}>
+      <div className="toast-stack" aria-live="polite">
+        {toasts.map((toast) => <div className={`app-toast ${toast.tone}`} key={toast.id}>{toast.text}</div>)}
+      </div>
+      {updateAvailable && (
+        <button className="update-banner" onClick={() => window.location.reload()}>
+          Dostępna nowa wersja — odśwież
+        </button>
+      )}
       {showSplash && (
-        <section className="studio-splash" onClick={() => {
-          sessionStorage.setItem('wrs-splash-seen', '1');
-          setShowSplash(false);
-        }}>
-          <div className="studio-mark">WRS</div>
-          <p>White Raven Studio presents</p>
-        </section>
+        <StudioSplash
+          compact={localStorage.getItem(HAS_SEEN_STUDIO_INTRO_KEY) === 'true'}
+          playtest={playtestToolsEnabled}
+          onDone={finishStudioIntro}
+        />
       )}
 
-      {screen === 'menu' && (
+      {showConsentPanel && !showSplash && (
+        <FirstRunConsentPanel
+          playtest={devParams.playtest}
+          onOpenLegal={(tab) => {
+            setShowConsentPanel(false);
+            setLegalTab(tab);
+            setScreen('legal');
+          }}
+          onAccept={acceptFirstRunConsents}
+          onClose={() => setShowConsentPanel(false)}
+        />
+      )}
+
+      {showOnboarding && !showSplash && !showConsentPanel && (
+        <OnboardingPanel
+          onGuest={() => completeOnboarding('menu')}
+          onLogin={() => completeOnboarding('login')}
+          onSignup={() => completeOnboarding('login')}
+          onClose={() => completeOnboarding('menu')}
+        />
+      )}
+
+      {showDailyReward && !showOnboarding && !showSplash && !showConsentPanel && (
+        <DailyRewardPanel session={session} onClose={() => setShowDailyReward(false)} />
+      )}
+
+      {screen === 'menu' && !showOnboarding && !showConsentPanel && (
+        <MainMenu
+          save={save}
+          highestUnlocked={highestUnlocked}
+          totalStars={totalStars}
+          totalPremiumStars={totalPremiumStars}
+          levelsCount={levels.length}
+          playerLabel={getPlayerLabel()}
+          networkLabel={getNetworkLabel()}
+          onlineStatus={onlineStatus}
+          playtest={devParams.playtest}
+          performanceMode={performanceMode}
+          session={session}
+          showStudioIntro={showStudioIntroSetting}
+          onPlay={playUnlocked}
+          onScreen={navigate}
+          onToggleSound={toggleSound}
+          onToggleTouchControls={() => setTouchControlsEnabled((v) => !v)}
+          onTogglePerformance={() => setPerformanceMode((value) => !value)}
+          onToggleAnalytics={toggleAnalytics}
+          onToggleIntro={() => setShowStudioIntroSetting((value) => !value)}
+          onFullscreen={toggleGameFullscreen}
+          fullscreenLabel={fullscreenActive || mobileFullscreenActive ? 'Wyjdź z pełnego ekranu' : 'Zainstaluj / pełny ekran'}
+          touchControlsEnabled={touchControlsEnabled}
+          analyticsEnabled={analyticsEnabled}
+          onLogout={logoutUser}
+          onUnlockAllDev={unlockAllDev}
+          devEnabled={devParams.enabled}
+          onClearProgress={clearProgress}
+          onOpenPlaytest={() => navigate('playtest')}
+        />
+      )}
+
+      {false && (
         <section className="menu-screen">
           <div className="brand-block">
             <p className="studio-badge">White Raven Studio</p>
@@ -619,6 +943,8 @@ export default function App() {
 
           <div className="menu-actions menu-primary-actions">
             <button className="primary-button big-play" onClick={playUnlocked}>Graj</button>
+            <button className="primary-button big-play duel-primary" onClick={() => setScreen('duel')}>DUEL <span className="menu-pill">NOWE</span></button>
+            <button className="primary-button big-play daily-primary" onClick={() => setScreen('daily')}>Daily <span className="menu-pill">DZIŚ</span></button>
             <button className="secondary-button big-play fullscreen-menu-button" onClick={toggleGameFullscreen}>
               {fullscreenActive || mobileFullscreenActive ? 'Wyjdź z pełnego ekranu' : 'Powiększ na cały ekran'}
             </button>
@@ -626,6 +952,10 @@ export default function App() {
 
           <div className="menu-actions">
             <button className="secondary-button" onClick={() => setScreen('levels')}>Poziomy</button>
+            <button className="secondary-button" onClick={() => setScreen('weekly')}>Turniej tygodnia</button>
+            <button className="secondary-button" onClick={() => setScreen('season')}>Season Pass</button>
+            <button className="secondary-button" onClick={() => setScreen('cosmetics')}>Kosmetyki</button>
+            <button className="secondary-button" onClick={() => setScreen('shop')}>Sklep</button>
             <button className="secondary-button" onClick={() => setScreen('leaderboard')}>Ranking</button>
             <button className="secondary-button" onClick={() => setScreen('duel')}>DUEL PvP</button>
             <button className="secondary-button" onClick={() => setScreen('friends')}>Znajomi</button>
@@ -642,6 +972,9 @@ export default function App() {
             </button>
             <button className="secondary-button" onClick={() => setPerformanceMode((value) => !value)}>
               Tryb wydajności: {performanceMode ? 'ON' : 'OFF'}
+            </button>
+            <button className="secondary-button" onClick={toggleAnalytics}>
+              Analityka playtest: {analyticsEnabled ? 'ON' : 'OFF'}
             </button>
             {session ? (
               <button className="secondary-button" onClick={async () => { await signOut(); setSession(null); }}>
@@ -662,6 +995,88 @@ export default function App() {
           </div>
           <InstallPrompt />
           <footer className="studio-footer">© 2026 White Raven Studio</footer>
+        </section>
+      )}
+
+      {screen === 'legal' && (
+        <section className="panel-screen legal-panel-screen">
+          <LegalPanel
+            initialTab={legalTab || 'terms'}
+            onAccept={() => setScreen('menu')}
+            onBack={() => setScreen('menu')}
+          />
+        </section>
+      )}
+
+      {screen === 'studio' && (
+        <section className="panel-screen legal-panel-screen">
+          <StudioAboutPanel onBack={() => setScreen('menu')} />
+        </section>
+      )}
+
+      {screen === 'contact' && (
+        <section className="panel-screen legal-panel-screen">
+          <ContactPanel
+            session={session}
+            playerLabel={getPlayerLabel()}
+            guestId={getGuestId()}
+            buildInfo={buildInfo}
+            onBack={() => setScreen('menu')}
+          />
+        </section>
+      )}
+
+      {screen === 'settings' && (
+        <section className="panel-screen legal-panel-screen">
+          <PrivacySettingsPanel
+            playtest={devParams.playtest}
+            analyticsEnabled={analyticsEnabled}
+            marketingConsent={marketingConsent}
+            showStudioIntro={showStudioIntroSetting}
+            onAnalyticsChange={(next) => {
+              setAnalyticsEnabled(next);
+              setAnalyticsEnabledState(next);
+            }}
+            onMarketingChange={setMarketingConsent}
+            onShowIntroChange={setShowStudioIntroSetting}
+            onOpenLegal={(tab) => {
+              setLegalTab(tab);
+              setScreen('legal');
+            }}
+            onCopyLocalData={copyLocalDataStatus}
+            onClearGuestData={clearProgress}
+            onLogout={logoutUser}
+            onBack={() => setScreen('menu')}
+          />
+        </section>
+      )}
+
+      {screen === 'playtest' && playtestToolsEnabled && (
+        <section className="panel-screen legal-panel-screen">
+          <PlaytestPanel
+            buildInfo={buildInfo}
+            online={isOnline()}
+            session={session}
+            profile={profile}
+            performanceMode={performanceMode}
+            touchControlsEnabled={touchControlsEnabled}
+            duelRoom={duelRoom}
+            onOpenLevel={(levelId) => startLevel(levelId)}
+            onUnlockAll={unlockAllDev}
+            onResetGuest={clearProgress}
+            onCopyDebugReport={copyDebugReport}
+            onOpenDuel={() => navigate('duel')}
+            onLeaveDuel={abandonActiveDuel}
+            onOpenContact={() => setScreen('contact')}
+            onOpenTesterInstructions={() => setScreen('testerInstructions')}
+            onBack={() => setScreen('menu')}
+          />
+        </section>
+      )}
+
+      {screen === 'testerInstructions' && playtestToolsEnabled && (
+        <section className="panel-screen legal-panel-screen">
+          <TesterInstructionsPanel onBack={() => setScreen('playtest')} />
         </section>
       )}
 
@@ -729,7 +1144,68 @@ export default function App() {
             profile={profile}
             onStartDuel={startDuelGame}
             onBack={() => setScreen('menu')}
+            initialRoomCode={duelJoinCode}
+            playtest={devParams.playtest || devParams.debug}
+            onRoomJoined={clearDuelJoinParam}
           />
+        </section>
+      )}
+
+      {screen === 'daily' && (
+        <section className="panel-screen">
+          <div className="panel-header">
+            <h2>Dzienne Wyzwanie</h2>
+            <button className="secondary-button compact" onClick={() => setScreen('menu')}>Menu</button>
+          </div>
+          <DailyChallengePanel
+            session={session}
+            onPlay={startDailyChallenge}
+            onBack={() => setScreen('menu')}
+          />
+        </section>
+      )}
+
+      {screen === 'weekly' && (
+        <section className="panel-screen">
+          <div className="panel-header">
+            <h2>Turniej Tygodnia</h2>
+            <button className="secondary-button compact" onClick={() => setScreen('menu')}>Menu</button>
+          </div>
+          <TournamentPanel
+            session={session}
+            onPlayLevel={(levelId) => startLevel(levelId)}
+            onBack={() => setScreen('menu')}
+          />
+        </section>
+      )}
+
+      {screen === 'season' && (
+        <section className="panel-screen">
+          <div className="panel-header">
+            <h2>Season Pass</h2>
+            <button className="secondary-button compact" onClick={() => setScreen('menu')}>Menu</button>
+          </div>
+          <SeasonPassPanel session={session} onBack={() => setScreen('menu')} />
+        </section>
+      )}
+
+      {screen === 'cosmetics' && (
+        <section className="panel-screen">
+          <div className="panel-header">
+            <h2>Kosmetyki</h2>
+            <button className="secondary-button compact" onClick={() => setScreen('menu')}>Menu</button>
+          </div>
+          <CosmeticsPanel session={session} onBack={() => setScreen('menu')} />
+        </section>
+      )}
+
+      {screen === 'shop' && (
+        <section className="panel-screen">
+          <div className="panel-header">
+            <h2>Sklep</h2>
+            <button className="secondary-button compact" onClick={() => setScreen('menu')}>Menu</button>
+          </div>
+          <ShopPanel session={session} onBack={() => setScreen('menu')} />
         </section>
       )}
 
@@ -828,11 +1304,15 @@ export default function App() {
                   skipToken={skipToken}
                   performanceMode={performanceMode}
                   onGameEvent={handleGameEvent}
+                  onGameReady={() => setOnlineStatus('Scena gry załadowana')}
+                  onGameError={(event) => reportClientError(event?.message || event, 'game-shell', event || {}, { userId: session?.user?.id })}
+                  onBackToMenu={goMenu}
                   touchControlsEnabled={touchControlsEnabled}
                   mobileControlsVisible={mobileControlsVisible}
                   mobileControlsDisabled={mobileControlsDisabled}
                   duelOptions={screen === 'duelGame' ? {
                     duelMode: true,
+                    mode: duelRoom?.mode,
                     duelRoomId: duelRoom?.id,
                     duelPlayerId: session?.user?.id,
                     duelTeam: duelPlayers.find((player) => player.user_id === session?.user?.id)?.team || 'A',
@@ -840,6 +1320,9 @@ export default function App() {
                     remotePlayersRef: duelPlayersRef,
                     duelEventsRef,
                     heldPowerup: duelHud?.heldPowerup,
+                    externalStartAt: duelRoom?.start_at,
+                    skipLocalCountdown: true,
+                    debug: devParams.debug || devParams.playtest,
                   } : null}
                 />
               </Suspense>
@@ -852,6 +1335,8 @@ export default function App() {
               currentUserId={session?.user?.id}
               heldPowerup={duelHud?.heldPowerup}
               duelHud={duelHud}
+              debug={devParams.debug || devParams.playtest}
+              eventsCount={duelEvents.length}
             />
           )}
           {skipAvailable && !paused && !result && (
@@ -932,13 +1417,19 @@ export default function App() {
                   {result.duelMode && (
                     <button className="primary-button" onClick={() => setScreen('duel')}>Lobby DUEL</button>
                   )}
+                  {result.duelMode && duelRoom?.host_user_id === session?.user?.id && (
+                    <button className="primary-button" onClick={createDuelRematch}>Stworz rewanz</button>
+                  )}
+                  {result.duelMode && duelRoom?.host_user_id !== session?.user?.id && (
+                    <button className="secondary-button" disabled>Czeka na hosta</button>
+                  )}
                   {!result.duelMode && !((result.level === 50) || (save.unlockedLevel < result.level + 1)) && result.level < MAX_LEVEL && (
                     <button className="primary-button" onClick={nextLevel}>Następny poziom</button>
                   )}
                   {!result.duelMode && result.level === MAX_LEVEL && (
                     <button className="primary-button" onClick={() => startLevel(1)}>Graj od nowa</button>
                   )}
-                  <button className="secondary-button" onClick={restartLevel}>Restart</button>
+                  {!result.duelMode && <button className="secondary-button" onClick={restartLevel}>Restart</button>}
                   <button className="secondary-button" onClick={goMenu}>Wybór poziomów</button>
                   <button className="secondary-button" onClick={() => openLeaderboardForLevel(result.level)}>Ranking poziomu</button>
                   <button className="secondary-button" onClick={shareResult}>Udostępnij wynik</button>
@@ -972,7 +1463,13 @@ export default function App() {
                 </div>
 
                 <div className="result-actions">
-                  <button className="primary-button" onClick={restartLevel}>Jeszcze raz</button>
+                  {result.duelMode && (
+                    <button className="primary-button" onClick={() => setScreen('duel')}>Lobby DUEL</button>
+                  )}
+                  {result.duelMode && duelRoom?.host_user_id === session?.user?.id && (
+                    <button className="primary-button" onClick={createDuelRematch}>Stworz rewanz</button>
+                  )}
+                  {!result.duelMode && <button className="primary-button" onClick={restartLevel}>Jeszcze raz</button>}
                   <button className="secondary-button" onClick={goMenu}>Wybór poziomów</button>
                   <button className="secondary-button" onClick={() => openLeaderboardForLevel(result.level)}>Ranking poziomu</button>
                   {(devParams.playtest || devParams.debug) && (
